@@ -1,5 +1,5 @@
 /*
-    ophyra_botones.c
+    ophyra_hcsr04.c
 
     Modulo de usuario en C para la utilizacion del sensor HCSR04 la tarjeta Ophyra, fabricada por
     Intesc Electronica y Embebidos.
@@ -27,6 +27,9 @@
 
 typedef struct _hcsr04_class_obj_t{
     mp_obj_base_t base;
+    uint16_t echo_timeout=0;
+    mp_hal_pin_obj_t trigger;
+    mp_hal_pin_obj_t echo;
 
 } hcsr04_class_obj_t;
 
@@ -44,11 +47,57 @@ STATIC void hcsr04_class_print(const mp_print_t *print, mp_obj_t self_in, mp_pri
 */
 STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     buttons_class_obj_t *self = m_new_obj(buttons_class_obj_t);
-    self->base.type = &buttons_class_type;
+    self->base.type = &hcsr04_class_type;
 
     
     return MP_OBJ_FROM_PTR(self);
 }
+
+/*
+    
+*/
+STATIC mp_obj_t init_function(mp_obj_t self_in, mp_hal_pin_obj_t trigger, mp_hal_pin_obj_t echo, mp_obj_t echo_timeout) {
+    hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    self->echo_timeout=echo_timeout;
+    self->trigger=trigger;
+    self->echo=echo;
+    mp_hal_pin_config(self->trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
+    mp_hal_pin_write(self-trigger, 0);
+    mp_hal_pin_config(self->echo, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
+    return mp_obj_new_float(1);
+}
+
+STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
+    hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_hal_pin_write(self->trigger,0);
+    mp_hal_delay_us(5);
+    mp_hal_pin_write(self->trigger,1);
+    mp_hal_delay_us(10);
+    mp_hal_pin_write(self->trigger,0);
+    uint8_t pulse_time=machine_time_pulse_us(self->echo,1,self->echo_timeout);
+    if(pulse_time!=0)
+        return MP_OBJ_NEW_SMALL_INT(pulse_time);
+    mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Out of range.\n"));
+
+}
+
+STATIC mp_obj_t distance_mm(mp_obj_t self_in) {
+    uint8_t pulse_time=send_pulse_and_wait();
+    uint8_t mm =pulse_time*100/582;
+    return MP_OBJ_NEW_SMALL_INT(mm);
+}
+
+STATIC mp_obj_t distance_cm(mp_obj_t self_in) {
+    uint8_t pulse_time=send_pulse_and_wait();
+    uint8_t cms =(pulse_time/2)/29.1;
+    return MP_OBJ_NEW_SMALL_INT(cms);
+};
+
+//Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
+MP_DEFINE_CONST_FUN_OBJ_4(init_function_obj, init_function);
+MP_DEFINE_CONST_FUN_OBJ_1(send_pulse_and_wait_obj, send_pulse_and_wait);
+MP_DEFINE_CONST_FUN_OBJ_1(distance_mm_obj, distance_mm);
+MP_DEFINE_CONST_FUN_OBJ_1(distance_cm_obj, distance_cm);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -58,10 +107,10 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     button0_pressed, que retorna el valor al leer el pin donde se encuentra el boton 1.
 */
 STATIC const mp_rom_map_elem_t buttons_class_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_sw1), MP_ROM_PTR(&button0_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw2), MP_ROM_PTR(&button1_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw3), MP_ROM_PTR(&button2_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw4), MP_ROM_PTR(&button3_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&init_function_obj) },
+    { MP_ROM_QSTR(MP_QSTR_send_pulse_and_wait), MP_ROM_PTR(&send_pulse_and_wait_obj) },
+    { MP_ROM_QSTR(MP_QSTR_distance_mm), MP_ROM_PTR(&distance_mm_obj) },
+    { MP_ROM_QSTR(MP_QSTR_distance_cm), MP_ROM_PTR(&distance_cm_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
