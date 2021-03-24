@@ -56,38 +56,34 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
 /*
     Estas 2 funciones retornan la escritura y lectura de la memoria eeprom. 
 */
-STATIC mp_obj_t eeprom_write(mp_obj_t data_str) {
-    //char data[]={'0'+shr, '0'+andr, '\0'};
-    //strcat(data, value);
-    //aqui va el i2c
+STATIC mp_obj_t eeprom_write(mp_obj_t data_int_obj, mp_obj_t eeaddr) {
+    int addr=mp_obj_new_int(eeaddr);
+    int data_int=mp_new_obj_int(data_int_obj);
+    uint8_t data[]={(uint8_t)addr>>8, (uint8_t)addr&0xFF, data_int};
+    
+    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data, sizeof(data), true);
     int response;
-
-    response=i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data_str, strlen(data_str), true);
-    if(response==0)
+    response = i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, eeaddr, 1, true );
+    if(response!=0)
     {
-        printf("No se puede escribir en  la eeprom\n");
+        return 1;
     }
-    printf("Si se puede escribir\n");
-    //mp_hal_delay_ms(500);
-    return mp_obj_new_int(response); 
-    //return mp_obj_new_int(1);
-
+    return 0;
 }
 
-STATIC mp_obj_t eeprom_read() {
-    
-    char *data;
-    //i2c debe de ir aqui
+STATIC mp_obj_t eeprom_read(mp_obj_t eeaddr) {
+    //i2c podra leer toda la memoria sin mandarle una direccion?
+    //en este caso la primera pagina de 32 bytes como prueba
+    int addr=mp_obj_new_int(eeaddr);
+    int uint8_t data[32];
     i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS,data,32,true);
-    //mp_hal_delay_ms(500);
-    printf(data);
-    return mp_obj_new_str(data);
+    return mp_obj_new_bytearray(data);
 };
 
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
-MP_DEFINE_CONST_FUN_OBJ_1(eeprom_write_obj, eeprom_write);
-MP_DEFINE_CONST_FUN_OBJ_0(eeprom_read_obj, eeprom_read);
+MP_DEFINE_CONST_FUN_OBJ_2(eeprom_write_obj, eeprom_write);
+MP_DEFINE_CONST_FUN_OBJ_1(eeprom_read_obj, eeprom_read);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
