@@ -27,13 +27,12 @@
 
 typedef struct _hcsr04_class_obj_t{
     mp_obj_base_t base;
-    uint16_t echo_timeout=0;
     mp_hal_pin_obj_t trigger;
     mp_hal_pin_obj_t echo;
 
 } hcsr04_class_obj_t;
 
-const mp_obj_type_t buttons_class_type;
+const mp_obj_type_t hcsr04_class_type;
 
 //Funcion print
 STATIC void hcsr04_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
@@ -46,7 +45,7 @@ STATIC void hcsr04_class_print(const mp_print_t *print, mp_obj_t self_in, mp_pri
         HCSR04()
 */
 STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    buttons_class_obj_t *self = m_new_obj(buttons_class_obj_t);
+    hcsr04_class_obj_t *self = m_new_obj(hcsr04_class_obj_t);
     self->base.type = &hcsr04_class_type;
 
     
@@ -56,45 +55,47 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
 /*
     
 */
-STATIC mp_obj_t init_function(mp_obj_t self_in, mp_hal_pin_obj_t trigger, mp_hal_pin_obj_t echo, mp_obj_t echo_timeout) {
+STATIC mp_obj_t init_function(mp_obj_t self_in, mp_hal_pin_obj_t trigger, mp_hal_pin_obj_t echo) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    self->echo_timeout=echo_timeout;
     self->trigger=trigger;
     self->echo=echo;
     mp_hal_pin_config(self->trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
-    mp_hal_pin_write(self-trigger, 0);
+    mp_hal_pin_write(self->trigger, 0);
     mp_hal_pin_config(self->echo, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
     return mp_obj_new_float(1);
 }
 
 STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    uint16_t echo_timeout=1000;
     mp_hal_pin_write(self->trigger,0);
     mp_hal_delay_us(5);
     mp_hal_pin_write(self->trigger,1);
     mp_hal_delay_us(10);
     mp_hal_pin_write(self->trigger,0);
-    uint8_t pulse_time=machine_time_pulse_us(self->echo,1,self->echo_timeout);
+    uint8_t pulse_time=machine_time_pulse_us(self->echo,1,echo_timeout);
     if(pulse_time!=0)
-        return MP_OBJ_NEW_SMALL_INT(pulse_time);
+        return mp_obj_new_int(pulse_time);
     mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Out of range.\n"));
 
 }
 
 STATIC mp_obj_t distance_mm(mp_obj_t self_in) {
-    uint8_t pulse_time=send_pulse_and_wait();
-    uint8_t mm =pulse_time*100/582;
-    return MP_OBJ_NEW_SMALL_INT(mm);
+    hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    int pulse_time=mp_obj_get_int(send_pulse_and_wait(self));
+    uint8_t mm =(uint8_t)pulse_time*100/582;
+    return mp_obj_new_int(mm);
 }
 
 STATIC mp_obj_t distance_cm(mp_obj_t self_in) {
-    uint8_t pulse_time=send_pulse_and_wait();
-    uint8_t cms =(pulse_time/2)/29.1;
-    return MP_OBJ_NEW_SMALL_INT(cms);
+    hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    int pulse_time=mp_obj_get_int(send_pulse_and_wait(self));
+    float cms=((uint8_t)pulse_time/2)/29.1;
+    return mp_obj_new_float(cms);
 };
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
-MP_DEFINE_CONST_FUN_OBJ_4(init_function_obj, init_function);
+MP_DEFINE_CONST_FUN_OBJ_3(init_function_obj, init_function);
 MP_DEFINE_CONST_FUN_OBJ_1(send_pulse_and_wait_obj, send_pulse_and_wait);
 MP_DEFINE_CONST_FUN_OBJ_1(distance_mm_obj, distance_mm);
 MP_DEFINE_CONST_FUN_OBJ_1(distance_cm_obj, distance_cm);
@@ -106,7 +107,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(distance_cm_obj, distance_cm);
     Internamente se llama al objeto de funcion button0_pressed_obj, que esta asociado con la funcion
     button0_pressed, que retorna el valor al leer el pin donde se encuentra el boton 1.
 */
-STATIC const mp_rom_map_elem_t buttons_class_locals_dict_table[] = {
+STATIC const mp_rom_map_elem_t hcsr04_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&init_function_obj) },
     { MP_ROM_QSTR(MP_QSTR_send_pulse_and_wait), MP_ROM_PTR(&send_pulse_and_wait_obj) },
     { MP_ROM_QSTR(MP_QSTR_distance_mm), MP_ROM_PTR(&distance_mm_obj) },
@@ -136,7 +137,7 @@ STATIC MP_DEFINE_CONST_DICT(mp_module_ophyra_hcsr04_globals, ophyra_hcsr04_globa
 // Define module object.
 const mp_obj_module_t ophyra_hcsr04_user_cmodule = {
     .base = { &mp_type_module },
-    .globals = (mp_obj_dict_t *)&mp_module_hcsr04_botones_globals,
+    .globals = (mp_obj_dict_t *)&mp_module_ophyra_hcsr04_globals,
 };
 
 // Registro del modulo para hacerlo disponible para Python.
