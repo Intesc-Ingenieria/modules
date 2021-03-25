@@ -24,17 +24,19 @@
 #include "py/mphal.h"          //Para el uso de la funcion mp_hal_pin_config
 #include "extmod/machine_pulse.h"
 
+/*
+    Deifinicion de pines de trabajo
+*/
+const pin_obj_t *pin_trigger;
+const pin_obj_t *pin_echo;
 
 typedef struct _hcsr04_class_obj_t{
     mp_obj_base_t base;
-    const pin_obj_t pin_trigger;
-    const pin_obj_t pin_echo;
     uint16_t echo_timeout;
 
 } hcsr04_class_obj_t;
 
 const mp_obj_type_t hcsr04_class_type;
-STATIC hcsr04_class_obj_t mi_hcsr04;
 //Funcion print
 STATIC void hcsr04_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
@@ -52,19 +54,20 @@ STATIC void hcsr04_class_print(const mp_print_t *print, mp_obj_t self_in, mp_pri
 */
 STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 3, 3, false);
+    hcsr04_class_obj_t *self = m_new_obj(hcsr04_class_obj_t);
+    self->base.type = &hcsr04_class_type;
     mp_obj_t source_trigger=args[0];
     mp_obj_t source_echo=args[1];
     mp_obj_t source_echo_timeout=args[2];
-    mi_hcsr04->*pin_trigger=pin_find(source_trigger);
-    mi_hcsr04->*pin_echo=pin_find(source_echo);
-    mi_hcsr04->echo=mp_obj_get_int(source_echo_timeout);
-    mi_hcsr04->echo_timeout=mp_obj_get_int(echo_timeout);
-    mp_hal_pin_config(mi_hcsr04->pin_trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
-    mp_hal_pin_write(mi_hcsr04->pin_trigger, 0);
-    mp_hal_pin_config(mi_hcsr04->pin_echo, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
+    pin_trigger=pin_find(source_trigger);
+    pin_echo=pin_find(source_echo);
+    self->echo_timeout=mp_obj_get_int(source_echo_timeout);
+    mp_hal_pin_config(pin_trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
+    mp_hal_pin_write(pin_trigger, 0);
+    mp_hal_pin_config(pin_echo, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
 
     
-    return MP_OBJ_FROM_PTR(&mi_hcsr04);
+    return MP_OBJ_FROM_PTR(self);
 }
 
 /*
@@ -74,12 +77,12 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
 */
 STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    mp_hal_pin_write(self->pin_trigger,0);
+    mp_hal_pin_write(pin_trigger,0);
     mp_hal_delay_us(5);
-    mp_hal_pin_write(self->pin_trigger,1);
+    mp_hal_pin_write(pin_trigger,1);
     mp_hal_delay_us(10);
-    mp_hal_pin_write(self->pin_trigger,0);
-    uint8_t pulse_time=machine_time_pulse_us(self->pin_echo,1,self->echo_timeout);
+    mp_hal_pin_write(pin_trigger,0);
+    uint8_t pulse_time=machine_time_pulse_us(pin_echo,1,self->echo_timeout);
     if(pulse_time!=0)
         return mp_obj_new_int(pulse_time);
     mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Out of range.\n"));
