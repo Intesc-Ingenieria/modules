@@ -1,35 +1,34 @@
 /*
-    ophyra_botones.c
+    ophyra_eeprom.c
 
     Modulo de usuario en C para la utilizacion de la memoria eeprom en la tarjeta Ophyra, fabricada por
     Intesc Electronica y Embebidos.
 
-    Este archivo incluye la definicion de una clase con 4 funciones, que retornan el estado del pin
-    en donde esta el boton especificado.
-
     Para construir el firmware incluyendo este modulo, ejecutar en Cygwin:
-        make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_MODULE_OPHYRA_EEPROM_ENABLED=1 all
+        make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_EEPROM_ENABLED=1 all****
 
         En USER_C_MODULES se especifica el path hacia la localizacion de la carpeta modules, donde se encuentra
         el archivo ophyra_eeprom.c y micropython.mk
 
-    Escrito por: Carlos D. Hernández.
+    Escrito por: Carlos D. Hernández y Jonatan Salinas.
     Ultima fecha de modificacion: 09/03/2021.
 
 */
 #include <stdio.h>
-#include <string.h>
 #include "py/runtime.h"
 #include "py/obj.h"
 #include "ports/stm32/mphalport.h"        
 #include "i2c.h"
+#include "py/objstr.h"
+#include <string.h>
+#include <stdio.h>
 
-#define M24C32_OPHYRA_ADDRESS         (80)
+
+#define M24C32_OPHYRA_ADDRESS         (160)
 #define I2C_TIMEOUT_MS                (50)
 
 typedef struct _eeprom_class_obj_t{
     mp_obj_base_t base;
-    //char data[10];
 } eeprom_class_obj_t;
 
 const mp_obj_type_t eeprom_class_type;
@@ -48,6 +47,8 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     eeprom_class_obj_t *self = m_new_obj(eeprom_class_obj_t);
     self->base.type = &eeprom_class_type;
 
+    printf("Ando en make new\n");
+
     i2c_init(I2C1, MICROPY_HW_I2C1_SCL, MICROPY_HW_I2C1_SDA, 400000, I2C_TIMEOUT_MS);
 
     return MP_OBJ_FROM_PTR(self);
@@ -56,34 +57,77 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
 /*
     Estas 2 funciones retornan la escritura y lectura de la memoria eeprom. 
 */
-STATIC mp_obj_t eeprom_write(mp_obj_t data_int_obj, mp_obj_t eeaddr) {
-    int addr=mp_obj_new_int(eeaddr);
-    int data_int=mp_new_obj_int(data_int_obj);
-    uint8_t data[]={(uint8_t)addr>>8, (uint8_t)addr&0xFF, data_int};
-    
-    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data, sizeof(data), true);
-    int response;
-    response = i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, eeaddr, 1, true );
-    if(response!=0)
-    {
-        return 1;
+STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_bytes_obj) {
+    eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    printf("Se supone que voy a escribir\n");
+
+    int addr=mp_obj_get_int(eeaddr);
+    printf("En la direccion: %d\n", addr);
+
+    mp_check_self(mp_obj_is_str_or_bytes(data_bytes_obj));
+    GET_STR_DATA_LEN(data_bytes_obj, str, str_len);
+    printf("mi string length: %lu\n", str_len);
+    char mi_copia[str_len];
+    strcpy(mi_copia, (char *)str);
+
+    printf("Mi copia vale: %s", mi_copia);
+
+
+    //int data_bytes=mp_obj_get_int(data_bytes_obj);
+
+    uint8_t datos_a_escribir[2+str_len+1];    //Le sumo 1 para el caracter nulo? \n
+    datos_a_escribir[0] = (uint8_t)(addr>>8);
+    datos_a_escribir[1] = (uint8_t)(addr&0xFF);
+
+    for(int i=0; i<(str_len+1); i++){
+        datos_a_escribir[i+2] = mi_copia[i];
     }
-    return 0;
+
+    for(int y=0; y<(2+str_len+1); y++){
+        printf("Byte %d vale: %d", y, datos_a_escribir[y]);
+    }
+
+    //uint8_t direccion_interna[3]={(uint8_t)(addr>>8), (uint8_t)(addr&0xFF), data_bytes};
+    
+    //i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data, sizeof(data), true);
+    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len+1), true);
+
+    printf("Se supone que ya acabe de escribir.\n");
+
+    return mp_obj_new_int(0);
 }
 
-STATIC mp_obj_t eeprom_read(mp_obj_t eeaddr) {
+STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_leer) {
+    eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    printf("Se supone que voy a leer\n");
     //i2c podra leer toda la memoria sin mandarle una direccion?
     //en este caso la primera pagina de 32 bytes como prueba
-    int addr=mp_obj_new_int(eeaddr);
-    int uint8_t data[32];
-    i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS,data,32,true);
-    return mp_obj_new_bytearray(data);
+    int addr=mp_obj_get_int(eeaddr);
+    int bytes_que_leere = mp_obj_get_int(bytes_a_leer);
+    uint8_t datos_leidos[bytes_que_leere];
+    //addr=addr>>8;
+    //uint8_t data[32];
+    uint8_t direccion_a_leer[2];    //Le sumo 1 para el caracter nulo? \n
+    direccion_a_leer[0] = (uint8_t)(addr>>8);
+    direccion_a_leer[1] = (uint8_t)(addr&0xFF);
+
+    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, direccion_a_leer, 2, false);
+    i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, datos_leidos, bytes_que_leere, true);
+
+    printf("Se supone que ya lei algo: \n");
+    for(int i=0; i<bytes_que_leere; i++){
+        printf("Byte %d vale: %d\n", i, datos_leidos[i]);
+    }
+
+    //return mp_obj_new_bytearray(sizeof(data), data);        //checar!
+    return mp_obj_new_int(1);
 };
 
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
-MP_DEFINE_CONST_FUN_OBJ_2(eeprom_write_obj, eeprom_write);
-MP_DEFINE_CONST_FUN_OBJ_1(eeprom_read_obj, eeprom_read);
+MP_DEFINE_CONST_FUN_OBJ_3(eeprom_write_obj, eeprom_write);
+MP_DEFINE_CONST_FUN_OBJ_2(eeprom_read_obj, eeprom_read);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
