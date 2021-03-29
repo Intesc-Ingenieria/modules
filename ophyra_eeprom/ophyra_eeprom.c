@@ -14,10 +14,10 @@
     Ultima fecha de modificacion: 09/03/2021.
 
 */
-#include <stdio.h>
+
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "ports/stm32/mphalport.h"        
+#include "py/mphal.h"        
 #include "i2c.h"
 #include "py/objstr.h"
 #include <string.h>
@@ -48,7 +48,7 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     self->base.type = &eeprom_class_type;
 
     printf("Ando en make new\n");
-
+    //I2C_TIMEOUT_MS esta definido en i2c.h?
     i2c_init(I2C1, MICROPY_HW_I2C1_SCL, MICROPY_HW_I2C1_SDA, 400000, I2C_TIMEOUT_MS);
 
     return MP_OBJ_FROM_PTR(self);
@@ -58,16 +58,15 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     Estas 2 funciones retornan la escritura y lectura de la memoria eeprom. 
 */
 STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_bytes_obj) {
-    eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    //eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     printf("Se supone que voy a escribir\n");
-
     int addr=mp_obj_get_int(eeaddr);
     printf("En la direccion: %d\n", addr);
 
     mp_check_self(mp_obj_is_str_or_bytes(data_bytes_obj));
     GET_STR_DATA_LEN(data_bytes_obj, str, str_len);
-    printf("mi string length: %lu\n", str_len);
+    //printf("mi string length: %lu\n", str_len);
     char mi_copia[str_len];
     strcpy(mi_copia, (char *)str);
 
@@ -99,7 +98,7 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
 }
 
 STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_leer) {
-    eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    //eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     printf("Se supone que voy a leer\n");
     //i2c podra leer toda la memoria sin mandarle una direccion?
     //en este caso la primera pagina de 32 bytes como prueba
@@ -127,7 +126,7 @@ STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_3(eeprom_write_obj, eeprom_write);
-MP_DEFINE_CONST_FUN_OBJ_2(eeprom_read_obj, eeprom_read);
+MP_DEFINE_CONST_FUN_OBJ_3(eeprom_read_obj, eeprom_read);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
