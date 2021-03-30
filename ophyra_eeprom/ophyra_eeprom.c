@@ -76,7 +76,7 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
     //int data_bytes=mp_obj_get_int(data_bytes_obj);
 
     uint8_t datos_a_escribir[2+str_len+1];    //Le sumo 1 para el caracter nulo? \n
-    datos_a_escribir[0] = (uint8_t)(addr>>8);
+    datos_a_escribir[0] = (uint8_t)((addr&0xFF00)>>8);
     datos_a_escribir[1] = (uint8_t)(addr&0xFF);
 
     for(int i=0; i<(str_len+1); i++){
@@ -84,14 +84,14 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
     }
 
     for(int y=0; y<(2+str_len+1); y++){
-        printf("Byte %d vale: %d", y, datos_a_escribir[y]);
+        printf("Byte %d vale: %d \n", y, datos_a_escribir[y]);
     }
 
     //uint8_t direccion_interna[3]={(uint8_t)(addr>>8), (uint8_t)(addr&0xFF), data_bytes};
     
     //i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data, sizeof(data), true);
     i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len+1), true);
-
+    mp_hal_delay_ms(50);
     printf("Se supone que ya acabe de escribir.\n");
 
     return mp_obj_new_int(0);
