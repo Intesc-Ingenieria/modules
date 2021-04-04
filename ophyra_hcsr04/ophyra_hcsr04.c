@@ -23,6 +23,7 @@
 #include "py/obj.h"
 #include "py/mphal.h"          //Para el uso de la funcion mp_hal_pin_config
 #include "extmod/machine_pulse.h"
+#include "py/mperrno.h"
 
 /*
     Deifinicion de pines de trabajo
@@ -64,7 +65,7 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     self->echo_timeout=mp_obj_get_int(source_echo_timeout);
     mp_hal_pin_config(pin_trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
     mp_hal_pin_write(pin_trigger, 0);
-    mp_hal_pin_config(pin_echo, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
+    mp_hal_pin_config(pin_echo, MP_HAL_PIN_MODE_INPUT, MP_HAL_PIN_PULL_NONE, 0);
 
     
     return MP_OBJ_FROM_PTR(self);
@@ -73,7 +74,9 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
 /*
     send_pulse_and_wait es una funcion definida de uso interno en la cual se utiliza para emitir las señales ultrasonicas,
     de esta manera se definen tiempos de espera en microsegundos especificos de espera en los que el sensor puede emitir una señal
-    y esta pueda ser capturada a traves de una funcion machine_time_pulse_us()
+    y esta pueda ser capturada a traves de una funcion machine_time_pulse_us(), de acuerdo a la documentacion machine_time-pulse_us()
+    puede devover 1 o 2 cuando se esta fuera de rango es por eso que se lanza la excepcion OSError 110 cuando se captura en la variable pulse_time
+    estos valores.
 */
 STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -82,10 +85,13 @@ STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
     mp_hal_pin_write(pin_trigger,1);
     mp_hal_delay_us(10);
     mp_hal_pin_write(pin_trigger,0);
-    uint8_t pulse_time=machine_time_pulse_us(pin_echo,1,self->echo_timeout);
-    if(pulse_time!=0)
-        return mp_obj_new_int(pulse_time);
-    mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Out of range.\n"));
+    unsigned int pulse_time=machine_time_pulse_us(pin_echo,1,self->echo_timeout);
+    if(pulse_time == 1 || pulse_time == 2)
+    {
+        mp_raise_OSError(MP_ETIMEDOUT);
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Out of range.\n"));
+    }
+    return mp_obj_new_int(pulse_time);
 
 }
 
@@ -98,7 +104,7 @@ STATIC mp_obj_t send_pulse_and_wait(mp_obj_t self_in) {
 STATIC mp_obj_t distance_mm(mp_obj_t self_in) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     int pulse_time=mp_obj_get_int(send_pulse_and_wait(self));
-    uint8_t mm =(uint8_t)pulse_time*100/582;
+    int mm =pulse_time*100/582;
     return mp_obj_new_int(mm);
 }
 
@@ -111,7 +117,7 @@ STATIC mp_obj_t distance_mm(mp_obj_t self_in) {
 STATIC mp_obj_t distance_cm(mp_obj_t self_in) {
     hcsr04_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     int pulse_time=mp_obj_get_int(send_pulse_and_wait(self));
-    float cms=((uint8_t)pulse_time/2)/29.1;
+    float cms=(pulse_time/2)/29.1;
     return mp_obj_new_float(cms);
 };
 

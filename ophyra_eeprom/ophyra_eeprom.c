@@ -11,7 +11,7 @@
         el archivo ophyra_eeprom.c y micropython.mk
 
     Escrito por: Carlos D. Hernández y Jonatan Salinas.
-    Ultima fecha de modificacion: 09/03/2021.
+    Ultima fecha de modificacion: 02/04/2021.
 
 */
 
@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 
-#define M24C32_OPHYRA_ADDRESS         (160)
+#define M24C32_OPHYRA_ADDRESS         (80)
 #define I2C_TIMEOUT_MS                (50)
 
 typedef struct _eeprom_class_obj_t{
@@ -66,50 +66,52 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
 
     mp_check_self(mp_obj_is_str_or_bytes(data_bytes_obj));
     GET_STR_DATA_LEN(data_bytes_obj, str, str_len);
-    //printf("mi string length: %lu\n", str_len);
+
+    printf("mi string length: %d\n", (int)str_len);
+
     char mi_copia[str_len];
     strcpy(mi_copia, (char *)str);
 
-    printf("Mi copia vale: %s", mi_copia);
+    printf("Mi copia vale: %s\n", mi_copia);
+    int tamanioCopia = sizeof(mi_copia)/sizeof(mi_copia[0]);
+    printf("Tamanio de mi copia es: %d\n", tamanioCopia);
 
-
-    //int data_bytes=mp_obj_get_int(data_bytes_obj);
-
-    uint8_t datos_a_escribir[2+str_len+1];    //Le sumo 1 para el caracter nulo? \n
-    datos_a_escribir[0] = (uint8_t)((addr&0xFF00)>>8);
+    uint8_t datos_a_escribir[2+str_len];    //Le sumo 1 para el caracter nulo? \n
+    datos_a_escribir[0] = (uint8_t)(addr>>8);
     datos_a_escribir[1] = (uint8_t)(addr&0xFF);
 
-    for(int i=0; i<(str_len+1); i++){
+    for(int i=0; i<str_len; i++){
         datos_a_escribir[i+2] = mi_copia[i];
     }
 
-    for(int y=0; y<(2+str_len+1); y++){
-        printf("Byte %d vale: %d \n", y, datos_a_escribir[y]);
+    for(int y=0; y<(2+str_len); y++){
+        printf("Byte %d vale: %d\n", y, datos_a_escribir[y]);
     }
 
-    //uint8_t direccion_interna[3]={(uint8_t)(addr>>8), (uint8_t)(addr&0xFF), data_bytes};
-    
-    //i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, data, sizeof(data), true);
-    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len+1), true);
-    mp_hal_delay_ms(50);
+    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len), true);
+
     printf("Se supone que ya acabe de escribir.\n");
 
     return mp_obj_new_int(0);
 }
 
 STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_leer) {
-    //eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     printf("Se supone que voy a leer\n");
-    //i2c podra leer toda la memoria sin mandarle una direccion?
-    //en este caso la primera pagina de 32 bytes como prueba
+
     int addr=mp_obj_get_int(eeaddr);
+    printf("Leere de la direccion: %d\n", addr);
+
     int bytes_que_leere = mp_obj_get_int(bytes_a_leer);
+    printf("Leere %d bytes\n", bytes_que_leere);
+
     uint8_t datos_leidos[bytes_que_leere];
-    //addr=addr>>8;
-    //uint8_t data[32];
+
     uint8_t direccion_a_leer[2];    //Le sumo 1 para el caracter nulo? \n
     direccion_a_leer[0] = (uint8_t)(addr>>8);
     direccion_a_leer[1] = (uint8_t)(addr&0xFF);
+
+    printf("direccion_a_leer[0]: %d\n", (int)direccion_a_leer[0]);
+    printf("direccion_a_leer[1]: %d\n", (int)direccion_a_leer[1]);
 
     i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, direccion_a_leer, 2, false);
     i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, datos_leidos, bytes_que_leere, true);
@@ -119,8 +121,8 @@ STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_
         printf("Byte %d vale: %d\n", i, datos_leidos[i]);
     }
 
-    //return mp_obj_new_bytearray(sizeof(data), data);        //checar!
-    return mp_obj_new_int(1);
+    return mp_obj_new_bytearray((size_t)bytes_que_leere, datos_leidos);        //checar!
+    //return mp_obj_new_int(1);
 };
 
 
