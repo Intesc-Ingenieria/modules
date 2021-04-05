@@ -6,7 +6,7 @@
 
     Este archivo incluye la definicion de una clase con 4 funciones, que sirven para hacer funcionar el
     sensor ultrasonico dando como resultado la longitud entre el sensor y un obstaculo que tenga frente
-    en Centimetros y Metros.
+    en Centimetros y Milimetros.
 
     Para construir el firmware incluyendo este modulo, ejecutar en Cygwin:
         make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_HCSR04_ENABLED=1 all
@@ -57,11 +57,9 @@ STATIC mp_obj_t hcsr04_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     mp_arg_check_num(n_args, n_kw, 3, 3, false);
     hcsr04_class_obj_t *self = m_new_obj(hcsr04_class_obj_t);
     self->base.type = &hcsr04_class_type;
-    mp_obj_t source_trigger=args[0];
-    mp_obj_t source_echo=args[1];
     mp_obj_t source_echo_timeout=args[2];
-    pin_trigger=pin_find(source_trigger);
-    pin_echo=pin_find(source_echo);
+    pin_trigger=pin_find(args[0]);
+    pin_echo=pin_find(args[1]);
     self->echo_timeout=mp_obj_get_int(source_echo_timeout);
     mp_hal_pin_config(pin_trigger, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
     mp_hal_pin_write(pin_trigger, 0);
