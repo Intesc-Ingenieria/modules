@@ -275,12 +275,12 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     Ejemplo de transmision de datos en Python:
                 self.write_cmd(CMD_RASET)
 */
-STATIC void write_cmd(uint8_t cmd)
+STATIC void write_cmd(int cmd)
 {
     mp_hal_pin_low(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //definimos un espacio de tamaño de 1 byte
-    spi_transfer(&spi_obj[1], 1, (uint8_t)cmd, NULL, TIMEOUT_SPI);
+    spi_transfer(&spi_obj[1],1, (const uint8_t *)cmd, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -290,12 +290,12 @@ STATIC void write_cmd(uint8_t cmd)
     Ejemplo de transmision de datos en Python:
                 self.write_data(bytearray([0x00, y0 + self.margin_row, 0x00, y1 + self.margin_row]))
 */
-STATIC void write_data(const uint8_t data[])
+STATIC void write_data( uint8_t *data, uint8_t len)
 {
     mp_hal_pin_high(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
-    spi_transfer(&spi_obj[1],(uint8_t)sizeof(data), data, NULL, TIMEOUT_SPI);
+    spi_transfer(&spi_obj[1],len, data, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -320,73 +320,73 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     //Optimizacion de la transmision de datos y delays
     write_cmd(CMD_FRMCTR1);
     //convertirlo en array dinamico?
-    const uint8_t data_set3[]={0x01, 0x2C, 0x2C};
-    write_data(data_set3);
+    uint8_t data_set3[]={0x01, 0x2C, 0x2C};
+    write_data(data_set3, sizeof(data_set3));
     write_cmd(CMD_FRMCTR2);
-    const uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
-    write_data(data_set6);
+     uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
+    write_data(data_set6, sizeof(data_set6));
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_INVCTR);
-    const uint8_t data_set1[]={0x07};
-    write_data(data_set1);
+     uint8_t data_set1[]={0x07};
+    write_data(data_set1, sizeof(data_set1));
     
     write_cmd(CMD_PWCTR1);
-    const uint8_t dataset[]={0xA2, 0x02, 0x84};
-    write_data(dataset);
+     uint8_t dataset[]={0xA2, 0x02, 0x84};
+    write_data(dataset, sizeof(dataset));
     write_cmd(CMD_PWCTR2);
-    const uint8_t dataset1[]={0xC5};
-    write_data(dataset1);
+     uint8_t dataset1[]={0xC5};
+    write_data(dataset1, sizeof(dataset1));
     write_cmd(CMD_PWCTR3);
-    const uint8_t dataset2[]={0x8A, 0x00};
-    write_data(dataset2);
+     uint8_t dataset2[]={0x8A, 0x00};
+    write_data(dataset2, sizeof(dataset2));
     write_cmd(CMD_PWCTR4);
-    const uint8_t dataset3[]={0x8A, 0x2A};
-    write_data(dataset3);
+     uint8_t dataset3[]={0x8A, 0x2A};
+    write_data(dataset3, sizeof(dataset3));
     write_cmd(CMD_PWCTR5);
-    const uint8_t dataset4[]={0x8A, 0xEE};
-    write_data(dataset4);
+     uint8_t dataset4[]={0x8A, 0xEE};
+    write_data(dataset4, sizeof(dataset4));
     
     write_cmd(CMD_VMCTR1);
-    const uint8_t data_vmc[]={0x0E};
-    write_data(data_vmc);
+     uint8_t data_vmc[]={0x0E};
+    write_data(data_vmc, sizeof(data_vmc));
 
     write_cmd(CMD_INVOFF);
     write_cmd(CMD_MADCTL);
 
-    if(orient==mp_const_none)
+    if(orient==mp_const_none || orient==mp_const_true)
     {
-        const uint8_t data_orient[]={0xA0};
-        write_data(data_orient);
+         uint8_t data_orient[]={0xA0};
+        write_data(data_orient, sizeof(data_orient));
         self->width=160;
         self->height=128;
     }
     else
     {
-        const uint8_t datas[]={0x00};
-        write_data(datas);
+         uint8_t datas[]={0x00};
+        write_data(datas, sizeof(datas));
         self->width=128;
         self->height=160;
     }
     write_cmd(CMD_COLMOD);
-    const uint8_t dataset0[]={0x05};
-    write_data(dataset0);
+     uint8_t dataset0[]={0x05};
+    write_data(dataset0, sizeof(dataset0));
 
     write_cmd(CMD_CASET);
-    const uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
-    write_data(dataset5);
+     uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
+    write_data(dataset5, sizeof(dataset5));
 
     write_cmd(CMD_RASET);
-    const uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
-    write_data(dataset6);
+     uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
+    write_data(dataset6, sizeof(dataset6));
     
     write_cmd(CMD_GMCTRP1);
-    const uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
-    write_data(dataset7);
+     uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
+    write_data(dataset7, sizeof(dataset7));
 
     write_cmd(CMD_GMCTRN1);
-    const uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
-    write_data(dataset8);
+     uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
+    write_data(dataset8, sizeof(dataset8));
 
     write_cmd(CMD_NORON);
     mp_hal_delay_ms(10);
