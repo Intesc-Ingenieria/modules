@@ -17,15 +17,18 @@
 #include <stdio.h>
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "ports/stm32/mphalport.h"        
+#include "py/mphal.h"
+//#include "ports/stm32/mphalport.h"        
 #include "i2c.h"
 #include "py/objstr.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 
 #define M24C32_OPHYRA_ADDRESS         (80)
 #define I2C_TIMEOUT_MS                (50)
+#define PAGE_SIZE                     (32)
 
 typedef struct _eeprom_class_obj_t{
     mp_obj_base_t base;
@@ -58,11 +61,10 @@ STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, 
     Estas 2 funciones retornan la escritura y lectura de la memoria eeprom. 
 */
 STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_bytes_obj) {
-    //eeprom_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-
+    printf("**************************\n");
     printf("Se supone que voy a escribir\n");
 
-    int addr=mp_obj_get_int(eeaddr);
+    uint16_t addr = (uint16_t)mp_obj_get_int(eeaddr);
     printf("En la direccion: %d\n", addr);
 
     mp_check_self(mp_obj_is_str_or_bytes(data_bytes_obj));
@@ -77,7 +79,75 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
     int tamanioCopia = sizeof(mi_copia)/sizeof(mi_copia[0]);
     printf("Tamanio de mi copia es: %d\n", tamanioCopia);
 
-    uint8_t datos_a_escribir[2+str_len];    //Le sumo 1 para el caracter nulo? \n
+
+    ///Aqui empece a modificar
+    uint16_t offset = addr&0x1F;
+    printf(" Offset es: %d\n", offset);
+    uint16_t pag_inicio = (addr&0x0FE0)>>5;
+    printf(" pag_inicio es: %d\n", pag_inicio);
+
+    uint16_t pag_final = (uint16_t)floor(pag_inicio + (((int)(str_len) + offset)/PAGE_SIZE));
+    printf(" pag_final es: %d\n", pag_final);
+
+    uint16_t num_pags_a_escribir = (pag_final-pag_inicio) + 1;
+    printf(" num_pags_a_escribir es: %d\n", num_pags_a_escribir);
+
+    uint16_t direccion_de_memoria;
+    uint16_t bytes_arr_temp = 0;
+    uint16_t num_bytes_que_faltan = (uint16_t)(str_len);
+    printf(" num_bytes_que_faltan es: %d\n", num_bytes_que_faltan);
+    int cont = 0;
+    printf(" Voy a entrar al for\n");
+    
+    for(int pag_actual=0; pag_actual<num_pags_a_escribir; pag_actual++){
+        printf("   Estoy en pagina: %d\n", pag_inicio);
+        if(num_pags_a_escribir==1){         //solo 1 pagina o primera pagina
+            bytes_arr_temp = num_bytes_que_faltan; 
+        }
+        else{
+            if(pag_actual == 0){
+                bytes_arr_temp = 32-offset;
+            }
+            else if(pag_actual == (num_pags_a_escribir-1)){
+                bytes_arr_temp = num_bytes_que_faltan;
+            }
+            else{
+                bytes_arr_temp = 32;
+            }
+        }
+
+        printf("   bytes_arr_temp: %d\n", bytes_arr_temp);
+        direccion_de_memoria = (pag_inicio<<5)|offset;
+        printf("   direccion_de_memoria: %d\n", direccion_de_memoria);
+
+        uint8_t datos_a_escribir[2+bytes_arr_temp];    
+        datos_a_escribir[0] = (uint8_t)(direccion_de_memoria>>8);
+        datos_a_escribir[1] = (uint8_t)(direccion_de_memoria&0xFF);
+
+        for(int i=0; i<bytes_arr_temp; i++){
+            datos_a_escribir[i+2] = mi_copia[cont];
+            cont++;
+        }
+
+        for(int y=0; y<(2+bytes_arr_temp); y++){
+            printf("Byte %d vale: %d\n", y, datos_a_escribir[y]);
+        }
+
+        i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+bytes_arr_temp), true);
+
+        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;
+        printf("   Ahora faltan: %d bytes.\n", num_bytes_que_faltan);
+
+        pag_inicio++;
+        offset = 0;
+        mp_hal_delay_us(6000);
+
+
+        //Agregar un delay para permitir que los datos se escriban.
+    }
+
+
+    /*uint8_t datos_a_escribir[2+str_len];    
     datos_a_escribir[0] = (uint8_t)(addr>>8);
     datos_a_escribir[1] = (uint8_t)(addr&0xFF);
 
@@ -90,25 +160,98 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
     }
 
     i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len), true);
+    */
 
     printf("Se supone que ya acabe de escribir.\n");
-
     return mp_obj_new_int(0);
 }
 
 STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_leer) {
-
+    printf("**************************\n");
     printf("Se supone que voy a leer\n");
 
-    int addr=mp_obj_get_int(eeaddr);
+    uint16_t addr = (uint16_t)mp_obj_get_int(eeaddr);
     printf("Leere de la direccion: %d\n", addr);
 
     int bytes_que_leere = mp_obj_get_int(bytes_a_leer);
     printf("Leere %d bytes\n", bytes_que_leere);
 
     uint8_t datos_leidos[bytes_que_leere];
+    int pos = 0;
 
-    uint8_t direccion_a_leer[2];    //Le sumo 1 para el caracter nulo? \n
+    ///Aqui empece a modificar
+    uint16_t offset = addr&0x1F;
+    printf(" Offset es: %d\n", offset);
+    uint16_t pag_inicio = (addr&0x0FE0)>>5;
+    printf(" pag_inicio es: %d\n", pag_inicio);
+
+    uint16_t pag_final = (uint16_t)floor(pag_inicio + ((bytes_que_leere + offset)/PAGE_SIZE));
+    printf(" pag_final es: %d\n", pag_final);
+
+    uint16_t num_pags_a_leer = (pag_final-pag_inicio) + 1;
+    printf(" num_pags_a_leer es: %d\n", num_pags_a_leer);
+
+    uint16_t direccion_de_memoria;
+    uint16_t bytes_arr_temp = 0;
+    uint16_t num_bytes_que_faltan = (uint16_t)(bytes_que_leere);
+    printf(" num_bytes_que_faltan es: %d\n", num_bytes_que_faltan);
+    printf(" Voy a entrar al for\n");
+    
+    for(int pag_actual=0; pag_actual<num_pags_a_leer; pag_actual++){
+        printf("   Estoy en pagina: %d\n", pag_inicio);
+        if(num_pags_a_leer==1){         //solo 1 pagina o primera pagina
+            bytes_arr_temp = num_bytes_que_faltan; 
+        }
+        else{
+            if(pag_actual == 0){
+                bytes_arr_temp = 32-offset;
+            }
+            else if(pag_actual == (num_pags_a_leer-1)){
+                bytes_arr_temp = num_bytes_que_faltan;
+            }
+            else{
+                bytes_arr_temp = 32;
+            }
+        }
+
+        printf("   bytes_arr_temp: %d\n", bytes_arr_temp);
+        direccion_de_memoria = (pag_inicio<<5)|offset;
+        printf("   direccion_de_memoria: %d\n", direccion_de_memoria);
+
+        uint8_t direccion_a_leer[2];
+        direccion_a_leer[0] = (uint8_t)(direccion_de_memoria>>8);
+        direccion_a_leer[1] = (uint8_t)(direccion_de_memoria&0xFF);
+
+        printf("direccion_a_leer[0]: %d\n", (int)direccion_a_leer[0]);
+        printf("direccion_a_leer[1]: %d\n", (int)direccion_a_leer[1]);
+
+        uint8_t arreglo_temporal[bytes_arr_temp];
+
+        //SI bytes_arr_temp ES DIFERENTE DE CERO!!
+        if(bytes_arr_temp != 0){
+            i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, direccion_a_leer, 2, false);
+            i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, arreglo_temporal, bytes_arr_temp, true);
+        }
+
+        printf("Se supone que ya lei algo: \n");
+        for(int i=0; i<bytes_arr_temp; i++){
+            printf("Byte %d vale: %d\n", i, arreglo_temporal[i]);
+        }
+
+        for(int y=0; y<bytes_arr_temp; y++){
+            datos_leidos[pos] = arreglo_temporal[y];
+            pos++;
+        }
+
+        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;
+        printf("   Ahora faltan: %d bytes.\n", num_bytes_que_faltan);
+
+        pag_inicio++;
+        offset = 0;       
+    }
+
+    /*
+    uint8_t direccion_a_leer[2];
     direccion_a_leer[0] = (uint8_t)(addr>>8);
     direccion_a_leer[1] = (uint8_t)(addr&0xFF);
 
@@ -122,9 +265,11 @@ STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_
     for(int i=0; i<bytes_que_leere; i++){
         printf("Byte %d vale: %d\n", i, datos_leidos[i]);
     }
+    */
 
-    return mp_obj_new_bytearray((size_t)bytes_que_leere, datos_leidos);        //checar!
-    //return mp_obj_new_int(1);
+
+    printf("Se supone que ya acabe de leer: \n");
+    return mp_obj_new_bytearray((size_t)bytes_que_leere, datos_leidos); 
 };
 
 
