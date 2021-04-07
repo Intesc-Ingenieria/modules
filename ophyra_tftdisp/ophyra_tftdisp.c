@@ -77,10 +77,10 @@
     Identificadores de los pines de trabajo
 */
 
-const pin_obj_t *Pin_DC=Pin_D6;
-const pin_obj_t *Pin_CS=Pin_A15;
-const pin_obj_t *Pin_RST=Pin_D7;
-const pin_obj_t *Pin_BL=Pin_A7;
+const pin_obj_t *Pin_DC=pin_D6;
+const pin_obj_t *Pin_CS=pin_A15;
+const pin_obj_t *Pin_RST=pin_D7;
+const pin_obj_t *Pin_BL=pin_A7;
 
 /*
     Definicion de la paleta de colores TFT
@@ -106,7 +106,7 @@ const pin_obj_t *Pin_BL=Pin_A7;
 #define FIRSTBIT        (0x00000000U)
 
 #define TIMEOUT_SPI     (5000)
-#define SPI1            (spi_find_index(1))
+//#define SPI1            (1)
 
 
 /*
@@ -225,7 +225,7 @@ typedef struct _tftdisp_class_obj_t{
     bool inverted;
     bool blacklight_on;
     uint8_t margin_row;
-    uint8_t margil_col;
+    uint8_t margin_col;
     uint8_t width;
     uint8_t height;
 } tftdisp_class_obj_t;
@@ -233,7 +233,7 @@ typedef struct _tftdisp_class_obj_t{
 const mp_obj_type_t tftdisp_class_type;
 
 //Funcion print
-STATIC void tftfisp_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
+STATIC void tftdisp_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
     mp_print_str(print, "tftdisp_class()");
 }
@@ -258,11 +258,11 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     self->blacklight_on=true;
     //inicialiacion de las columnas y filas del display TFT
     self->margin_row=0;
-    self->margin_col=0
+    self->margin_col=0;
 
     // Configuraciones de la comunicacion SPI
-    spi_set_params(SPI1, PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
-    spi_init(SPI1,false);
+    spi_set_params(&spi_obj[1], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
+    spi_init(&spi_obj[1],false);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -280,8 +280,8 @@ STATIC void write_cmd(uint8_t cmd)
     mp_hal_pin_low(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //definimos un espacio de tamaño de 1 byte
-    spi_transfer(SPI1, 1, cmd, NULL, TIMEOUT_SPI);
-    mp__hal_pin_high(Pin_CS);
+    spi_transfer(&spi_obj[1], 1, (uint8_t)cmd, NULL, TIMEOUT_SPI);
+    mp_hal_pin_high(Pin_CS);
 }
 
 /*
@@ -295,7 +295,7 @@ STATIC void write_data(const uint8_t data[])
     mp_hal_pin_high(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
-    spi_transfer(SPI1,sizeof(data), data, NULL, TIMEOUT_SPI);
+    spi_transfer(&spi_obj[1],(uint8_t)sizeof(data), data, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -314,7 +314,7 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     //reset() function here
     write_cmd(CMD_SWRESET);
     mp_hal_delay_ms(150);
-    write_cmd(CMD_SLPOUT)
+    write_cmd(CMD_SLPOUT);
     mp_hal_delay_ms(255);
 
     //Optimizacion de la transmision de datos y delays
@@ -328,27 +328,27 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_INVCTR);
-    const uint8_t data_set1={0x07};
+    const uint8_t data_set1[]={0x07};
     write_data(data_set1);
     
     write_cmd(CMD_PWCTR1);
-    const uint8_t dataset={0xA2, 0x02, 0x84};
+    const uint8_t dataset[]={0xA2, 0x02, 0x84};
     write_data(dataset);
     write_cmd(CMD_PWCTR2);
-    const uint8_t dataset1={0xC5};
+    const uint8_t dataset1[]={0xC5};
     write_data(dataset1);
     write_cmd(CMD_PWCTR3);
-    const uint8_t dataset2={0x8A, 0x00};
+    const uint8_t dataset2[]={0x8A, 0x00};
     write_data(dataset2);
     write_cmd(CMD_PWCTR4);
-    const uint8_t dataset3={0x8A, 0x2A};
+    const uint8_t dataset3[]={0x8A, 0x2A};
     write_data(dataset3);
     write_cmd(CMD_PWCTR5);
-    const uint8_t dataset4={0x8A, 0xEE};
+    const uint8_t dataset4[]={0x8A, 0xEE};
     write_data(dataset4);
     
     write_cmd(CMD_VMCTR1);
-    const uint8_t data_vmc={0x0E};
+    const uint8_t data_vmc[]={0x0E};
     write_data(data_vmc);
 
     write_cmd(CMD_INVOFF);
@@ -363,17 +363,17 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     }
     else
     {
-        const uint8_t data{}={0x00};
-        write_data(data);
-        self->witdth=128;
-        self->width=160;
+        const uint8_t datas[]={0x00};
+        write_data(datas);
+        self->width=128;
+        self->height=160;
     }
     write_cmd(CMD_COLMOD);
     const uint8_t dataset0[]={0x05};
     write_data(dataset0);
 
     write_cmd(CMD_CASET);
-    const uint8_t dataset5[]={0x00, 0x01, 0x00, 127}
+    const uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
     write_data(dataset5);
 
     write_cmd(CMD_RASET);
@@ -385,7 +385,7 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     write_data(dataset7);
 
     write_cmd(CMD_GMCTRN1);
-    const uint8_t dataset8={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
+    const uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
     write_data(dataset8);
 
     write_cmd(CMD_NORON);
