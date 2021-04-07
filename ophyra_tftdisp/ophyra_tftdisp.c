@@ -20,8 +20,8 @@
 
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "py/mphal.h"          //Para el uso de la funcion mp_hal_pin_config
-
+#include "py/mphal.h"          
+#include "ports/stm32/spi.h"
 /*
     Definicion de los Comandos
 */
@@ -66,8 +66,8 @@
 #define CMD_PWCTR1  (0xC0)  // Power Control Settings
 #define CMD_PWCTR2  (0xC1)  // Power Control Settings
 #define CMD_PWCTR3  (0xC2)  // Power Control Settings
-#define CMD_PWCTR3  (0xC3)  // Power Control Settings
-#define CMD_PWCTR4  (0xC4)  // Power Control Settings
+#define CMD_PWCTR4  (0xC3)  // Power Control Settings
+#define CMD_PWCTR5  (0xC4)  // Power Control Settings
 #define CMD_VMCTR1  (0xC5)  // VCOM Control
 
 #define CMD_GMCTRP1 (0xE0)
@@ -94,6 +94,20 @@ const pin_obj_t *Pin_BL=Pin_A7;
 #define COLOR_MAGENTA   (0xF81F)
 #define COLOR_YELLOW    (0xFFE0)
 #define COLOR_WHITE     (0xFFFF)
+
+/*
+    SPI1 Conf
+*/
+#define PRESCALE        (2)
+#define BAUDRATE        (8000000)
+#define POLARITY        (1)
+#define PHASE           (0)
+#define BITS            (8)
+#define FIRSTBIT        (0x00000000U)
+
+#define TIMEOUT_SPI     (5000)
+#define SPI1            (spi_find_index(1))
+
 
 /*
     Font Lib implemented here.
@@ -203,7 +217,7 @@ static const uint8_t Font[]=
 };
 
 /*
-    Definicion de la estructura de datos dispuesta para que 
+    Definicion de la estructura de datos dispuesta para la pantalla TFT
 */
 typedef struct _tftdisp_class_obj_t{
     mp_obj_base_t base;
@@ -246,16 +260,145 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     self->margin_row=0;
     self->margin_col=0
 
+    // Configuraciones de la comunicacion SPI
+    spi_set_params(SPI1, PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
+    spi_init(SPI1,false);
+
     return MP_OBJ_FROM_PTR(self);
 }
 
-/*
-    Funciones Aqui
-*/
+//  Funciones Aqui
 
+/*
+    write_cmd() nos sirve para comunicarnos con la pantalla TFT a traves de comandos preestablecidos, los
+    cuales sirven para configurar la tft previo a su funcionamiento.
+    Ejemplo de transmision de datos en Python:
+                self.write_cmd(CMD_RASET)
+*/
+STATIC void write_cmd(uint8_t cmd)
+{
+    mp_hal_pin_low(Pin_DC);
+    mp_hal_pin_low(Pin_CS);
+    //definimos un espacio de tamaño de 1 byte
+    spi_transfer(SPI1, 1, cmd, NULL, TIMEOUT_SPI);
+    mp__hal_pin_high(Pin_CS);
+}
+
+/*
+    write_data() nos permite mandar arreglos de memoria definidos del tipo bytearray solo de manera interna para el control
+    de datos que conforman ciertas funciones como show_image().
+    Ejemplo de transmision de datos en Python:
+                self.write_data(bytearray([0x00, y0 + self.margin_row, 0x00, y1 + self.margin_row]))
+*/
+STATIC void write_data(const uint8_t data[])
+{
+    mp_hal_pin_high(Pin_DC);
+    mp_hal_pin_low(Pin_CS);
+    //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
+    spi_transfer(SPI1,sizeof(data), data, NULL, TIMEOUT_SPI);
+    mp_hal_pin_high(Pin_CS);
+}
+
+/*
+    st7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
+        ST7735().init()
+    En este caso habra un cambio el cual la funcion se invocara de la siguiente manera:
+        ST7735().init(True)
+
+*/
+STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    //mp_obj_is_bool(orient);
+    //primer hard reset 
+    //reset() function here
+    write_cmd(CMD_SWRESET);
+    mp_hal_delay_ms(150);
+    write_cmd(CMD_SLPOUT)
+    mp_hal_delay_ms(255);
+
+    //Optimizacion de la transmision de datos y delays
+    write_cmd(CMD_FRMCTR1);
+    //convertirlo en array dinamico?
+    const uint8_t data_set3[]={0x01, 0x2C, 0x2C};
+    write_data(data_set3);
+    write_cmd(CMD_FRMCTR2);
+    const uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
+    write_data(data_set6);
+    mp_hal_delay_ms(10);
+
+    write_cmd(CMD_INVCTR);
+    const uint8_t data_set1={0x07};
+    write_data(data_set1);
+    
+    write_cmd(CMD_PWCTR1);
+    const uint8_t dataset={0xA2, 0x02, 0x84};
+    write_data(dataset);
+    write_cmd(CMD_PWCTR2);
+    const uint8_t dataset1={0xC5};
+    write_data(dataset1);
+    write_cmd(CMD_PWCTR3);
+    const uint8_t dataset2={0x8A, 0x00};
+    write_data(dataset2);
+    write_cmd(CMD_PWCTR4);
+    const uint8_t dataset3={0x8A, 0x2A};
+    write_data(dataset3);
+    write_cmd(CMD_PWCTR5);
+    const uint8_t dataset4={0x8A, 0xEE};
+    write_data(dataset4);
+    
+    write_cmd(CMD_VMCTR1);
+    const uint8_t data_vmc={0x0E};
+    write_data(data_vmc);
+
+    write_cmd(CMD_INVOFF);
+    write_cmd(CMD_MADCTL);
+
+    if(orient==mp_const_none)
+    {
+        const uint8_t data_orient[]={0xA0};
+        write_data(data_orient);
+        self->width=160;
+        self->height=128;
+    }
+    else
+    {
+        const uint8_t data{}={0x00};
+        write_data(data);
+        self->witdth=128;
+        self->width=160;
+    }
+    write_cmd(CMD_COLMOD);
+    const uint8_t dataset0[]={0x05};
+    write_data(dataset0);
+
+    write_cmd(CMD_CASET);
+    const uint8_t dataset5[]={0x00, 0x01, 0x00, 127}
+    write_data(dataset5);
+
+    write_cmd(CMD_RASET);
+    const uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
+    write_data(dataset6);
+    
+    write_cmd(CMD_GMCTRP1);
+    const uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
+    write_data(dataset7);
+
+    write_cmd(CMD_GMCTRN1);
+    const uint8_t dataset8={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
+    write_data(dataset8);
+
+    write_cmd(CMD_NORON);
+    mp_hal_delay_ms(10);
+
+    write_cmd(CMD_DISPON);
+    mp_hal_delay_ms(100);
+    
+    return mp_const_none;
+}
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
-
+MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
 
 
 /*
@@ -266,10 +409,7 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     backlight_state, que cambia el estado de la luz de fondo de la pantalla TFT.
 */
 STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_sw1), MP_ROM_PTR(&button0_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw2), MP_ROM_PTR(&button1_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw3), MP_ROM_PTR(&button2_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_sw4), MP_ROM_PTR(&button3_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&st7735_init_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
@@ -287,7 +427,7 @@ STATIC const mp_rom_map_elem_t ophyra_tftdisp_globals_table[] = {
                                                     //Nombre del archivo (User C module)
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_ophyra_tftdisp) },
             //Nombre de la clase        //Nombre del "tipo" asociado.
-    { MP_ROM_QSTR(MP_QSTR_sw), MP_ROM_PTR(&tftdisp_class_type) },
+    { MP_ROM_QSTR(MP_QSTR_ST7735), MP_ROM_PTR(&tftdisp_class_type) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_ophyra_tftdisp_globals, ophyra_tftdisp_globals_table);
