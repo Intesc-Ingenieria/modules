@@ -14,7 +14,7 @@
         el archivo ophyra_tftdisp.c y micropython.mk
 
     Escrito por: Jonatan Salinas y Carlos D. Hernández.
-    Ultima fecha de modificacion: 05/04/2021.
+    Ultima fecha de modificacion: 07/04/2021.
 
 */
 
@@ -223,7 +223,7 @@ typedef struct _tftdisp_class_obj_t{
     mp_obj_base_t base;
     bool power_on;
     bool inverted;
-    bool blacklight_on;
+    bool backlight_on;
     uint8_t margin_row;
     uint8_t margin_col;
     uint8_t width;
@@ -255,7 +255,7 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     //definición de los estados logicos 
     self->power_on=true;
     self->inverted=false;
-    self->blacklight_on=true;
+    self->backlight_on=true;
     //inicialiacion de las columnas y filas del display TFT
     self->margin_row=0;
     self->margin_col=0;
@@ -298,7 +298,47 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     spi_transfer(&spi_obj[1],len, data, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
+/*
+    set_window() Define configuraciones para las filas y columnas en el display del display, de tal manera que
+    cuando se ubique un pixel o caracter? este se preconfigure.
+    
+    Disclaimer.
+        Se necesita hacer una conversion a los objetos con los que trabajes en las otras funciones que se definan
+        dentro de uPython.
+*/
+STATIC void set_window(mp_obj_t self_in, uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
+{
+    //Set window frame boundaries.
+    //Any pixels written to the display will start from this area. 
 
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    // set row XSTART/XEND
+    write_cmd(CMD_RASET);
+    uint8_t bytes_send[]={0x00, y0 + self->margin_row, 0x00, y1 + self->margin_row};
+    write_data(bytes_send, sizeof(bytes_send));
+
+    // set column XSTART/XEND
+    write_cmd(CMD_CASET);
+    uint8_t bytes_send1[]={0x00, y0 + self->margin_col, 0x00, y1 + self->margin_col};
+    write_data(bytes_send1, sizeof(bytes_send1));
+
+    // write addresses to RAM
+    write_cmd(CMD_RAMWR);
+}
+
+/*
+    reset() Hard reset the display.
+*/
+STATIC void reset(void)
+{
+    mp_hal_pin_low(Pin_DC);
+    mp_hal_pin_high(Pin_RST);
+    mp_hal_delay_ms(500);
+    mp_hal_pin_low(Pin_RST);
+    mp_hal_delay_ms(500);
+    mp_hal_pin_high(Pin_RST);
+    mp_hal_delay_ms(500);
+}
 /*
     st7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
         ST7735().init()
@@ -311,7 +351,7 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     //mp_obj_is_bool(orient);
     //primer hard reset 
-    //reset() function here
+    reset(); //function here
     write_cmd(CMD_SWRESET);
     mp_hal_delay_ms(150);
     write_cmd(CMD_SLPOUT);
@@ -323,32 +363,32 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     uint8_t data_set3[]={0x01, 0x2C, 0x2C};
     write_data(data_set3, sizeof(data_set3));
     write_cmd(CMD_FRMCTR2);
-     uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
+    uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
     write_data(data_set6, sizeof(data_set6));
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_INVCTR);
-     uint8_t data_set1[]={0x07};
+    uint8_t data_set1[]={0x07};
     write_data(data_set1, sizeof(data_set1));
     
     write_cmd(CMD_PWCTR1);
-     uint8_t dataset[]={0xA2, 0x02, 0x84};
+    uint8_t dataset[]={0xA2, 0x02, 0x84};
     write_data(dataset, sizeof(dataset));
     write_cmd(CMD_PWCTR2);
-     uint8_t dataset1[]={0xC5};
+    uint8_t dataset1[]={0xC5};
     write_data(dataset1, sizeof(dataset1));
     write_cmd(CMD_PWCTR3);
-     uint8_t dataset2[]={0x8A, 0x00};
+    uint8_t dataset2[]={0x8A, 0x00};
     write_data(dataset2, sizeof(dataset2));
     write_cmd(CMD_PWCTR4);
-     uint8_t dataset3[]={0x8A, 0x2A};
+    uint8_t dataset3[]={0x8A, 0x2A};
     write_data(dataset3, sizeof(dataset3));
     write_cmd(CMD_PWCTR5);
-     uint8_t dataset4[]={0x8A, 0xEE};
+    uint8_t dataset4[]={0x8A, 0xEE};
     write_data(dataset4, sizeof(dataset4));
     
     write_cmd(CMD_VMCTR1);
-     uint8_t data_vmc[]={0x0E};
+    uint8_t data_vmc[]={0x0E};
     write_data(data_vmc, sizeof(data_vmc));
 
     write_cmd(CMD_INVOFF);
@@ -356,36 +396,36 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
 
     if(orient==mp_const_none || orient==mp_const_true)
     {
-         uint8_t data_orient[]={0xA0};
+        uint8_t data_orient[]={0xA0};
         write_data(data_orient, sizeof(data_orient));
         self->width=160;
         self->height=128;
     }
     else
     {
-         uint8_t datas[]={0x00};
+        uint8_t datas[]={0x00};
         write_data(datas, sizeof(datas));
         self->width=128;
         self->height=160;
     }
     write_cmd(CMD_COLMOD);
-     uint8_t dataset0[]={0x05};
+    uint8_t dataset0[]={0x05};
     write_data(dataset0, sizeof(dataset0));
 
     write_cmd(CMD_CASET);
-     uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
+    uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
     write_data(dataset5, sizeof(dataset5));
 
     write_cmd(CMD_RASET);
-     uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
+    uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
     write_data(dataset6, sizeof(dataset6));
     
     write_cmd(CMD_GMCTRP1);
-     uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
+    uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
     write_data(dataset7, sizeof(dataset7));
 
     write_cmd(CMD_GMCTRN1);
-     uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
+    uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
     write_data(dataset8, sizeof(dataset8));
 
     write_cmd(CMD_NORON);
@@ -397,9 +437,83 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     return mp_const_none;
 }
 
+/*
+    power() esta funcion sirve para encender la pantalla u obtener el estado de la pantalla?
+*/
+STATIC mp_obj_t power(mp_obj_t self_in, mp_obj_t state)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(state==mp_const_none)
+    {
+        return mp_obj_new_bool(self->power_on?1:0);
+    }
+    if(state==mp_const_true)
+    {
+        write_cmd(CMD_DISPON);
+        self->power_on=true;
+    }
+    if (state==mp_const_false)
+    {
+        write_cmd(CMD_DISPOFF);
+        self->power_on=false;
+    }
+    return mp_const_none;
+    
+}
+
+/*
+    inverted() sirve para obtener una inversion de colores en la TFT a traves de comandos
+*/
+STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    if(state==mp_const_none)
+    {
+        return mp_obj_new_bool(self->inverted?1:0);
+    }
+    if(state==mp_const_true)
+    {
+        write_cmd(CMD_INVON);
+        self->inverted=true;
+    }
+    if (state==mp_const_false)
+    {
+        write_cmd(CMD_INVOFF);
+        self->inverted=false;
+    }
+    
+    return mp_const_none;
+}
+
+/*
+    backlight() Esta funcion permite encender la luz de la pantalla TFT.
+*/
+STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(state==mp_const_none)
+    {
+        return mp_obj_new_bool(self->backlight_on?1:0);
+    }
+    if((mp_int_t)state==1 || state==mp_const_true)
+    {
+        mp_hal_pin_high(Pin_BL);
+        self->backlight_on=true;
+    }
+    else
+    {
+        mp_hal_pin_low(Pin_BL);
+        self->backlight_on=false;
+    }
+    return mp_const_none;
+}
+
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
-
+MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
+MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
+MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -410,6 +524,9 @@ MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
 */
 STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&st7735_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_inverted), MP_ROM_PTR(&inverted_obj) },
+    { MP_ROM_QSTR(MP_QSTR_power), MP_ROM_PTR(&power_obj) },
+    { MP_ROM_QSTR(MP_QSTR_backlight), MP_ROM_PTR(&backlight_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
