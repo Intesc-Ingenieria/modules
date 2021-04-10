@@ -1,34 +1,27 @@
 /*
     ophyra_eeprom.c
 
-    Modulo de usuario en C para la utilizacion de la memoria eeprom en la tarjeta Ophyra, fabricada por
+    Modulo de usuario en C para la utilizacion de la memoria EEPROM M24C32 en la tarjeta Ophyra, fabricada por
     Intesc Electronica y Embebidos.
 
-    Para construir el firmware incluyendo este modulo, ejecutar en Cygwin:
-        make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_EEPROM_ENABLED=1 all****
-
-        En USER_C_MODULES se especifica el path hacia la localizacion de la carpeta modules, donde se encuentra
-        el archivo ophyra_eeprom.c y micropython.mk
+    Este modulo en C contiene las funciones necesarias para escribir y leer cierta cantidad de bytes de la
+    memoria EEPROM.
 
     Escrito por: Carlos D. Hernández y Jonatan Salinas.
-    Ultima fecha de modificacion: 02/04/2021.
+    Ultima fecha de modificacion: 10/04/2021.
 
 */
-#include <stdio.h>
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "py/mphal.h"
-//#include "ports/stm32/mphalport.h"        
+#include "py/mphal.h"       
 #include "i2c.h"
 #include "py/objstr.h"
 #include <string.h>
-#include <stdio.h>
 #include <math.h>
 
-
-#define M24C32_OPHYRA_ADDRESS         (80)
-#define I2C_TIMEOUT_MS                (50)
-#define PAGE_SIZE                     (32)
+#define M24C32_OPHYRA_ADDRESS         (80)          //ID o direccion de este esclavo para ser identificado en el puerto I2C
+#define I2C_TIMEOUT_MS                (50)          //Timeout para I2C
+#define PAGE_SIZE                     (32)          //Tamanio de pagina de la EEPROM modelo M24C32
 
 typedef struct _eeprom_class_obj_t{
     mp_obj_base_t base;
@@ -36,79 +29,72 @@ typedef struct _eeprom_class_obj_t{
 
 const mp_obj_type_t eeprom_class_type;
 
-//Funcion print
+/*
+    Funcion print. Se invoca cuando el usuario escribe algo como:
+    miEeprom = MC24C32()
+    print(miEeprom)
+*/
 STATIC void eeprom_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
     mp_print_str(print, "eeprom_class()");
 }
 
 /*
-    make_new: Constructor de la clase. Esta funcion se invoca cuando el usuario de Micropython escribe:
-        MC24C32()
+    make_new: Constructor de la clase. Esta funcion se invoca cuando el usuario de Micropython escribe algo similar a:
+        miEeprom = MC24C32()
 */
 STATIC mp_obj_t eeprom_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     eeprom_class_obj_t *self = m_new_obj(eeprom_class_obj_t);
     self->base.type = &eeprom_class_type;
 
-    printf("Ando en make new\n");
-
+    //Se inicia el puerto 1 de I2C.
     i2c_init(I2C1, MICROPY_HW_I2C1_SCL, MICROPY_HW_I2C1_SDA, 400000, I2C_TIMEOUT_MS);
 
     return MP_OBJ_FROM_PTR(self);
 }
 
 /*
-    Estas 2 funciones retornan la escritura y lectura de la memoria eeprom. 
+    Funcion de escritura hacia la memoria EEPROM. Se invoca cuando el usuario de Micropython escribe algo como:
+        miEeprom.write(0x6EA3, arregloBytes)
+    En Micropython se deben especificar dos parametros:
+        1.- La direccion de memoria a partir de donde se van a comenzar a escribir los datos.
+            b11-b5 indican la pagina en donde se van a comenzar a escribir los datos.
+            b4-b0 indican el offset de la pagina a partir del cual se van a comenzar a escribir los datos.
+            
+        2.- El arreglo de bytes (bytearray) que se va a escribir en memoria.
 */
 STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_bytes_obj) {
-    printf("**************************\n");
-    printf("Se supone que voy a escribir\n");
 
     uint16_t addr = (uint16_t)mp_obj_get_int(eeaddr);
-    printf("En la direccion: %d\n", addr);
 
     mp_check_self(mp_obj_is_str_or_bytes(data_bytes_obj));
-    GET_STR_DATA_LEN(data_bytes_obj, str, str_len);
-
-    printf("mi string length: %d\n", (int)str_len);
-
-    char mi_copia[str_len];
+    GET_STR_DATA_LEN(data_bytes_obj, str, str_len);         //Este macro toma el bytearray pasado como parametro y
+                                                            //genera el pointer "str", que es un pointer a caracter;
+                                                            //y str_len, de tipo size_t que es la longitud del array.
+    
+    char mi_copia[str_len];                                 //Se hace una copia del string/array pasado como parametro.
     strcpy(mi_copia, (char *)str);
 
-    printf("Mi copia vale: %s\n", mi_copia);
-    int tamanioCopia = sizeof(mi_copia)/sizeof(mi_copia[0]);
-    printf("Tamanio de mi copia es: %d\n", tamanioCopia);
-
-
-    ///Aqui empece a modificar
-    uint16_t offset = addr&0x1F;
-    printf(" Offset es: %d\n", offset);
-    uint16_t pag_inicio = (addr&0x0FE0)>>5;
-    printf(" pag_inicio es: %d\n", pag_inicio);
-
-    uint16_t pag_final = (uint16_t)floor(pag_inicio + (((int)(str_len) + offset)/PAGE_SIZE));
-    printf(" pag_final es: %d\n", pag_final);
-
-    uint16_t num_pags_a_escribir = (pag_final-pag_inicio) + 1;
-    printf(" num_pags_a_escribir es: %d\n", num_pags_a_escribir);
+    uint16_t offset = addr&0x1F;                            //Calculo del offset de la pagina donde se comenzara a escribir
+    uint16_t pag_inicio = (addr&0x0FE0)>>5;                 //De que pagina se comenzara a escribir?
+    uint16_t pag_final = (uint16_t)floor(pag_inicio + (((int)(str_len) + offset)/PAGE_SIZE));   //En que pagina me detendre?
+    uint16_t num_pags_a_escribir = (pag_final-pag_inicio) + 1;          //En cuantas paginas voy a escribir?
 
     uint16_t direccion_de_memoria;
-    uint16_t bytes_arr_temp = 0;
-    uint16_t num_bytes_que_faltan = (uint16_t)(str_len);
-    printf(" num_bytes_que_faltan es: %d\n", num_bytes_que_faltan);
+    uint16_t bytes_arr_temp = 0;                            //variable que guardara el tamanio del array que se va a mandar
+    uint16_t num_bytes_que_faltan = (uint16_t)(str_len);    //por cada pagina que se escriba
+
     int cont = 0;
-    printf(" Voy a entrar al for\n");
     
     for(int pag_actual=0; pag_actual<num_pags_a_escribir; pag_actual++){
-        printf("   Estoy en pagina: %d\n", pag_inicio);
-        if(num_pags_a_escribir==1){         //solo 1 pagina o primera pagina
+        if(num_pags_a_escribir==1){                             //Si solo escribire en una pagina
             bytes_arr_temp = num_bytes_que_faltan; 
         }
-        else{
-            if(pag_actual == 0){
+        else{                                                   //Si escribire en varias paginas
+            if(pag_actual == 0){                                //Si estoy en la primera de ellas
                 bytes_arr_temp = 32-offset;
             }
-            else if(pag_actual == (num_pags_a_escribir-1)){
+            else if(pag_actual == (num_pags_a_escribir-1)){     //Si estoy en la ultima pagina a escribir
                 bytes_arr_temp = num_bytes_que_faltan;
             }
             else{
@@ -116,90 +102,61 @@ STATIC mp_obj_t eeprom_write(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t data_by
             }
         }
 
-        printf("   bytes_arr_temp: %d\n", bytes_arr_temp);
-        direccion_de_memoria = (pag_inicio<<5)|offset;
-        printf("   direccion_de_memoria: %d\n", direccion_de_memoria);
+        direccion_de_memoria = (pag_inicio<<5)|offset;          //Calculo de los 16 bits de la direccion de memoria a escribir.
 
         uint8_t datos_a_escribir[2+bytes_arr_temp];    
-        datos_a_escribir[0] = (uint8_t)(direccion_de_memoria>>8);
-        datos_a_escribir[1] = (uint8_t)(direccion_de_memoria&0xFF);
+        datos_a_escribir[0] = (uint8_t)(direccion_de_memoria>>8);           //MSB de la direccion de memoria
+        datos_a_escribir[1] = (uint8_t)(direccion_de_memoria&0xFF);         //LSB de la direccion de memoria
 
-        for(int i=0; i<bytes_arr_temp; i++){
-            datos_a_escribir[i+2] = mi_copia[cont];
+        for(int i=0; i<bytes_arr_temp; i++){                    //Se ponen en el array "datos_a_escribir" la cantidad de datos
+            datos_a_escribir[i+2] = mi_copia[cont];             //a mandar en este envio
             cont++;
         }
 
-        for(int y=0; y<(2+bytes_arr_temp); y++){
-            printf("Byte %d vale: %d\n", y, datos_a_escribir[y]);
-        }
-
+        //Se escriben esos datos mediante I2C
         i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+bytes_arr_temp), true);
 
-        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;
-        printf("   Ahora faltan: %d bytes.\n", num_bytes_que_faltan);
+        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;       //Ahora, cuantos bytes faltan por escribir?
+        pag_inicio++;                                                       //Paso a la siguiente pagina
+        offset = 0;                                                         //Como estoy en una nueva pag, offset es 0.
+        mp_hal_delay_us(6000);                                              //delay para permitir a la memoria escribir los datos
 
-        pag_inicio++;
-        offset = 0;
-        mp_hal_delay_us(6000);
-
-
-        //Agregar un delay para permitir que los datos se escriban.
     }
 
-
-    /*uint8_t datos_a_escribir[2+str_len];    
-    datos_a_escribir[0] = (uint8_t)(addr>>8);
-    datos_a_escribir[1] = (uint8_t)(addr&0xFF);
-
-    for(int i=0; i<str_len; i++){
-        datos_a_escribir[i+2] = mi_copia[i];
-    }
-
-    for(int y=0; y<(2+str_len); y++){
-        printf("Byte %d vale: %d\n", y, datos_a_escribir[y]);
-    }
-
-    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, datos_a_escribir, (2+str_len), true);
-    */
-
-    printf("Se supone que ya acabe de escribir.\n");
     return mp_obj_new_int(0);
 }
 
+/*
+    Funcion de lectura de la memoria EEPROM. Se invoca cuando el usuario de Micropython escribe algo como:
+        PalR = miEeprom.read(0x6EA3, len(arregloBytes))
+    En Micropython se deben especificar dos parametros:
+        1.- La direccion de memoria a partir de donde se van a comenzar a leer los datos.
+            b11-b5 indican la pagina en donde se van a comenzar a leer los datos.
+            b4-b0 indican el offset de la pagina a partir del cual se van a comenzar a leer los datos.
+            
+        2.- La cantidad de bytes que se va a leer de la memoria.
+
+    La funcion devuelve los bytes leidos, en forma de arreglo de bytes (bytearray).
+*/
 STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_leer) {
-    printf("**************************\n");
-    printf("Se supone que voy a leer\n");
 
     uint16_t addr = (uint16_t)mp_obj_get_int(eeaddr);
-    printf("Leere de la direccion: %d\n", addr);
-
     int bytes_que_leere = mp_obj_get_int(bytes_a_leer);
-    printf("Leere %d bytes\n", bytes_que_leere);
 
-    uint8_t datos_leidos[bytes_que_leere];
+    uint8_t datos_leidos[bytes_que_leere];                      //Array donde se colocaran los datos leidos.
     int pos = 0;
 
-    ///Aqui empece a modificar
-    uint16_t offset = addr&0x1F;
-    printf(" Offset es: %d\n", offset);
+    uint16_t offset = addr&0x1F;                                //Esta funcion es muy similar a la de escritura.
     uint16_t pag_inicio = (addr&0x0FE0)>>5;
-    printf(" pag_inicio es: %d\n", pag_inicio);
-
     uint16_t pag_final = (uint16_t)floor(pag_inicio + ((bytes_que_leere + offset)/PAGE_SIZE));
-    printf(" pag_final es: %d\n", pag_final);
-
     uint16_t num_pags_a_leer = (pag_final-pag_inicio) + 1;
-    printf(" num_pags_a_leer es: %d\n", num_pags_a_leer);
 
     uint16_t direccion_de_memoria;
     uint16_t bytes_arr_temp = 0;
     uint16_t num_bytes_que_faltan = (uint16_t)(bytes_que_leere);
-    printf(" num_bytes_que_faltan es: %d\n", num_bytes_que_faltan);
-    printf(" Voy a entrar al for\n");
     
     for(int pag_actual=0; pag_actual<num_pags_a_leer; pag_actual++){
-        printf("   Estoy en pagina: %d\n", pag_inicio);
-        if(num_pags_a_leer==1){         //solo 1 pagina o primera pagina
+        if(num_pags_a_leer==1){       
             bytes_arr_temp = num_bytes_que_faltan; 
         }
         else{
@@ -214,73 +171,42 @@ STATIC mp_obj_t eeprom_read(mp_obj_t self_in, mp_obj_t eeaddr, mp_obj_t bytes_a_
             }
         }
 
-        printf("   bytes_arr_temp: %d\n", bytes_arr_temp);
         direccion_de_memoria = (pag_inicio<<5)|offset;
-        printf("   direccion_de_memoria: %d\n", direccion_de_memoria);
 
         uint8_t direccion_a_leer[2];
-        direccion_a_leer[0] = (uint8_t)(direccion_de_memoria>>8);
-        direccion_a_leer[1] = (uint8_t)(direccion_de_memoria&0xFF);
-
-        printf("direccion_a_leer[0]: %d\n", (int)direccion_a_leer[0]);
-        printf("direccion_a_leer[1]: %d\n", (int)direccion_a_leer[1]);
+        direccion_a_leer[0] = (uint8_t)(direccion_de_memoria>>8);       //MSB de la direccion a leer.
+        direccion_a_leer[1] = (uint8_t)(direccion_de_memoria&0xFF);     //LSB de la direccion a leer.
 
         uint8_t arreglo_temporal[bytes_arr_temp];
 
-        //SI bytes_arr_temp ES DIFERENTE DE CERO!!
+        //Solo si bytes_arr_temp es diferente de 0, entonces lees.
         if(bytes_arr_temp != 0){
             i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, direccion_a_leer, 2, false);
             i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, arreglo_temporal, bytes_arr_temp, true);
         }
 
-        printf("Se supone que ya lei algo: \n");
-        for(int i=0; i<bytes_arr_temp; i++){
-            printf("Byte %d vale: %d\n", i, arreglo_temporal[i]);
-        }
-
-        for(int y=0; y<bytes_arr_temp; y++){
-            datos_leidos[pos] = arreglo_temporal[y];
+        for(int y=0; y<bytes_arr_temp; y++){                //Lo que lei, lo pongo en el array que sera devuelto
+            datos_leidos[pos] = arreglo_temporal[y];        //al usuario al final de la funcion.
             pos++;
         }
 
-        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;
-        printf("   Ahora faltan: %d bytes.\n", num_bytes_que_faltan);
-
+        num_bytes_que_faltan = num_bytes_que_faltan - bytes_arr_temp;       //Cuantos bytes faltan por leer?
         pag_inicio++;
         offset = 0;       
     }
 
-    /*
-    uint8_t direccion_a_leer[2];
-    direccion_a_leer[0] = (uint8_t)(addr>>8);
-    direccion_a_leer[1] = (uint8_t)(addr&0xFF);
-
-    printf("direccion_a_leer[0]: %d\n", (int)direccion_a_leer[0]);
-    printf("direccion_a_leer[1]: %d\n", (int)direccion_a_leer[1]);
-
-    i2c_writeto(I2C1, M24C32_OPHYRA_ADDRESS, direccion_a_leer, 2, false);
-    i2c_readfrom(I2C1,M24C32_OPHYRA_ADDRESS, datos_leidos, bytes_que_leere, true);
-
-    printf("Se supone que ya lei algo: \n");
-    for(int i=0; i<bytes_que_leere; i++){
-        printf("Byte %d vale: %d\n", i, datos_leidos[i]);
-    }
-    */
-
-
-    printf("Se supone que ya acabe de leer: \n");
-    return mp_obj_new_bytearray((size_t)bytes_que_leere, datos_leidos); 
+    return mp_obj_new_bytearray((size_t)bytes_que_leere, datos_leidos);     //Se devuelve el bytearray de los datos leidos.
 };
 
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_3(eeprom_write_obj, eeprom_write);
 MP_DEFINE_CONST_FUN_OBJ_3(eeprom_read_obj, eeprom_read);
+
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
         MC224().read()
-        
 */
 STATIC const mp_rom_map_elem_t eeprom_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&eeprom_read_obj) },
