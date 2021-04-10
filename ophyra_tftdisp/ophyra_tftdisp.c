@@ -270,7 +270,7 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
 //  Funciones Aqui
 
 /*
-    write_cmd() nos sirve para comunicarnos con la pantalla TFT a traves de comandos preestablecidos, los
+    write_cmd() Intern function | Nos sirve para comunicarnos con la pantalla TFT a traves de comandos preestablecidos, los
     cuales sirven para configurar la tft previo a su funcionamiento.
     Ejemplo de transmision de datos en Python:
                 self.write_cmd(CMD_RASET)
@@ -285,7 +285,7 @@ STATIC void write_cmd(int cmd)
 }
 
 /*
-    write_data() nos permite mandar arreglos de memoria definidos del tipo bytearray solo de manera interna para el control
+    write_data() Intern function | Nos permite mandar arreglos de memoria definidos del tipo bytearray solo de manera interna para el control
     de datos que conforman ciertas funciones como show_image().
     Ejemplo de transmision de datos en Python:
                 self.write_data(bytearray([0x00, y0 + self.margin_row, 0x00, y1 + self.margin_row]))
@@ -299,7 +299,7 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     mp_hal_pin_high(Pin_CS);
 }
 /*
-    set_window() Define configuraciones para las filas y columnas en el display del display, de tal manera que
+    set_window() intern function | Define configuraciones para las filas y columnas en el display de la pantalla de tal manera que
     cuando se ubique un pixel o caracter? este se preconfigure.
     
     Disclaimer.
@@ -338,6 +338,27 @@ STATIC void reset(void)
     mp_hal_delay_ms(500);
     mp_hal_pin_high(Pin_RST);
     mp_hal_delay_ms(500);
+}
+
+/*
+    write_pixels() intern function | Sirve para  
+*/
+
+STATIC void write_pixels(uint16_t count, uint16_t color)
+{
+        //Write pixels to the display.
+        //count - total number of pixels
+        //color - 16-bit RGB value
+    uint8_t data_transfer[2]={(uint8_t)(color>>8), (uint8_t)(color&0xFF)};
+    mp_hal_pin_high(Pin_DC);
+    mp_hal_pin_low(Pin_CS);
+    for(uint16_t i=0; i<count;i++)
+    {   
+        //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
+        //siempre se mandan 2 bytes a esta funcion
+        spi_transfer(&spi_obj[1],2,data_transfer, NULL, TIMEOUT_SPI);
+    }
+    mp_hal_pin_high(Pin_CS);
 }
 /*
     st7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
@@ -509,11 +530,28 @@ STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
     return mp_const_none;
 }
 
+/*
+    rgbcolor() funcion para establecer colores en la pantalla tft dado los
+    parametros Red, Green, Blue.
+*/
+STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
+{
+    //Pack 24-bit RGB into 16-bit value.
+    uint8_t red, green, blue;
+    red=mp_obj_get_int(r);
+    green=mp_obj_get_int(g);
+    blue=mp_obj_get_int(b);
+    return mp_obj_new_int(((red & 0xF8) << 8) | ((green & 0xFC) << 3 ) | (blue >> 3));
+}
+
+
+
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
+MP_DEFINE_CONST_FUN_OBJ_3(rgbcolor_obj, rgbcolor);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -527,6 +565,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_inverted), MP_ROM_PTR(&inverted_obj) },
     { MP_ROM_QSTR(MP_QSTR_power), MP_ROM_PTR(&power_obj) },
     { MP_ROM_QSTR(MP_QSTR_backlight), MP_ROM_PTR(&backlight_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rgbcolor), MP_ROM_PTR(&rgbcolor_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
