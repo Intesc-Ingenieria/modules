@@ -261,8 +261,8 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     self->margin_col=0;
 
     // Configuraciones de la comunicacion SPI
-    spi_set_params(&spi_obj[1], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
-    spi_init(&spi_obj[1],false);
+    spi_set_params(&spi_obj[0], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
+    spi_init(&spi_obj[0],false);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -280,7 +280,7 @@ STATIC void write_cmd(int cmd)
     mp_hal_pin_low(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //definimos un espacio de tamaño de 1 byte
-    spi_transfer(&spi_obj[1],1, (const uint8_t *)cmd, NULL, TIMEOUT_SPI);
+    spi_transfer(&spi_obj[0],1, (const uint8_t *)cmd, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -295,7 +295,7 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     mp_hal_pin_high(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
-    spi_transfer(&spi_obj[1],len, data, NULL, TIMEOUT_SPI);
+    spi_transfer(&spi_obj[0],len, data, NULL, TIMEOUT_SPI);
     mp_hal_pin_high(Pin_CS);
 }
 /*
@@ -356,7 +356,7 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
     {   
         //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
         //siempre se mandan 2 bytes a esta funcion
-        spi_transfer(&spi_obj[1],2,data_transfer, NULL, TIMEOUT_SPI);
+        spi_transfer(&spi_obj[0],2,data_transfer, NULL, TIMEOUT_SPI);
     }
     mp_hal_pin_high(Pin_CS);
 }
@@ -381,7 +381,7 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     //Optimizacion de la transmision de datos y delays
     write_cmd(CMD_FRMCTR1);
     //convertirlo en array dinamico?
-    uint8_t data_set3[]={0x01, 0x2C, 0x2C};
+    uint8_t data_set3[]={0x01, 0x2C, 0x2D};
     write_data(data_set3, sizeof(data_set3));
     write_cmd(CMD_FRMCTR2);
     uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
@@ -493,12 +493,12 @@ STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
     {
         return mp_obj_new_bool(self->inverted?1:0);
     }
-    if(state==mp_const_true)
+    if(state==mp_const_true || (mp_int_t)state==1)
     {
         write_cmd(CMD_INVON);
         self->inverted=true;
     }
-    if (state==mp_const_false)
+    else
     {
         write_cmd(CMD_INVOFF);
         self->inverted=false;
@@ -544,7 +544,51 @@ STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
     return mp_obj_new_int(((red & 0xF8) << 8) | ((green & 0xFC) << 3 ) | (blue >> 3));
 }
 
+/*
+    pixel(x, y, color) nos sirve para dibujar un solo pixel individual en la pantalla TFT
+    Ejemplo en uPython:
+        tft.pixel(10,20,tft.rgbcolor(255,25,0))
+*/
+STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
+{
+    //Draw a single pixel on the display with given color.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint8_t x_int8=mp_obj_get_int(args[1]);
+    uint8_t y_int8=mp_obj_get_int(args[2]);
+    uint16_t color_int16=mp_obj_get_int(args[3]);
+    set_window(self, x_int8, y_int8, x_int8+1, y_int8+1);
+    write_pixels(1,color_int16);
+    return mp_const_none;
+}
 
+/*
+    rect()
+*/
+STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
+{
+    //Draw a rectangle with specified coordinates/size and fill with color.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint8_t x=mp_obj_get_int(args[1]);
+    uint8_t y=mp_obj_get_int(args[2]);
+    uint8_t w=mp_obj_get_int(args[3]);
+    uint8_t h=mp_obj_get_int(args[4]);
+    uint16_t color=mp_obj_get_int(args[5]);
+    if(x>=self->width || y>=self->height)
+    {
+        return mp_const_none;
+    }
+    if((x+w-1) >= self->width)
+    {
+        w=self->width-x;
+    }
+    if((y+h-1)>=self->height)
+    {
+        h=self->height-y;
+    }
+    set_window(self, x, y, x+w-1, y+h-1);
+    write_pixels((w*h), color);
+    return mp_const_none;
+}
 
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
@@ -552,6 +596,8 @@ MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
 MP_DEFINE_CONST_FUN_OBJ_3(rgbcolor_obj, rgbcolor);
+MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
+MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -566,6 +612,8 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_power), MP_ROM_PTR(&power_obj) },
     { MP_ROM_QSTR(MP_QSTR_backlight), MP_ROM_PTR(&backlight_obj) },
     { MP_ROM_QSTR(MP_QSTR_rgbcolor), MP_ROM_PTR(&rgbcolor_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&rect_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
