@@ -18,6 +18,7 @@
 
 */
 
+#include <stdlib.h>
 #include "py/runtime.h"
 #include "py/obj.h"
 #include "py/mphal.h"          
@@ -361,6 +362,44 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
     mp_hal_pin_high(Pin_CS);
 }
 /*
+    hline() | Intern Function. Esta funcion es de uso interno para la creacion de
+    lineas horizontales en el display TFT.
+    Acepta parametros primitivos al ser de uso interno.
+*/
+STATIC mp_obj_t hline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint16_t color)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(x>=self->width || y>=self->height)
+    {
+        return mp_const_none;
+    }
+    set_window(self, x, y, x+w-1, y);
+    write_pixels(x+w-1, color);
+    return mp_const_none;
+}
+
+/*
+    vline() | Intern function. Esta funcion es de uso interno para la
+    creacion de lineas verticales en el display TFT, de este manera se
+    envian parametros primitivos al ser de uso interno
+*/
+STATIC mp_obj_t vline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t h, uint16_t color)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(x>=self->width || y>=self->height)
+    {
+        return mp_const_none;
+    }
+    if((y+h-1)>=self->height)
+    {
+        h=self->height-y;
+    }
+    set_window(self, x, y, x, y+h-1);
+    write_pixels(y+h-1, color);
+    return mp_const_none;
+}
+
+/*
     st7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
         ST7735().init()
     En este caso habra un cambio el cual la funcion se invocara de la siguiente manera:
@@ -549,20 +588,22 @@ STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
     Ejemplo en uPython:
         tft.pixel(10,20,tft.rgbcolor(255,25,0))
 */
-STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
+STATIC mp_obj_t pixel(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
 {
     //Draw a single pixel on the display with given color.
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    uint8_t x_int8=mp_obj_get_int(args[1]);
-    uint8_t y_int8=mp_obj_get_int(args[2]);
-    uint16_t color_int16=mp_obj_get_int(args[3]);
-    set_window(self, x_int8, y_int8, x_int8+1, y_int8+1);
-    write_pixels(1,color_int16);
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    set_window(self, x, y, x+1, y+1);
+    write_pixels(1,color);
     return mp_const_none;
 }
 
 /*
-    rect()
+    rect() Esta funcion nos sirve para la creacion de un
+    cuadrilatero en el que a traves de las coordenadas x, y
+    , la altura h, la anchura w y el color se implementa en 
+    esta función.
+    Ejemplo de uso en uPython:
+        tft.rect(10,20,50,60,tft.rgbcolor(23,0,254))
 */
 STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
 {
@@ -590,14 +631,119 @@ STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
     return mp_const_none;
 }
 
+/*
+    line() Esta funcion crea el trazado de lineas en el display
+    a través del algoritmo de Bresenham's
+*/
+STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    //transformar los objetos
+    uint8_t x0=mp_obj_get_int(args[1]);
+    uint8_t y0=mp_obj_get_int(args[2]);
+    uint8_t x1=mp_obj_get_int(args[3]);
+    uint8_t y1=mp_obj_get_int(args[4]);
+    uint16_t color=mp_obj_get_int(args[5]);
+    uint8_t start, end;
+    //comienzo de la funcion
+    if(x0==x1)
+    {
+        if (y1<y0)
+        {
+            start=x1;
+            end=y1;
+        }
+        else
+        {
+            start=x0;
+            end=y0;
+        }
+        vline(self, start, end, abs(y1-y0)+1, color);
+    }
+    else if(y0==y1)
+    {
+        if (x1<x0)
+        {
+            start=x1;
+            end=y1;
+        }
+        else
+        {
+            start=x0;
+            end=y0;
+        }
+        hline(self, start, end, abs(x1-x0)+1, color);
+    }
+    else
+    {   
+        //Comienzo del algoritmo de Bresenham's
+        uint8_t dx=abs(x1-x0);
+        uint8_t dy=abs(y1-y0);
+        uint8_t inx, iny;
+        if((x1-x0)>0 && (y1-y0)>0)
+        {
+            inx=1;
+            iny=1;
+        }
+        else
+        {
+            inx=-1;
+            iny=-1;
+        }
+        //step line
+        if(dx>=dy)
+        {
+            dy<<=1;
+            uint8_t e = dy-dx;
+            dx<<=1;
+            while (x0!=x1)
+            {
+                //draw pixels
+                pixel(self, x0, y0, color);
+                if(e>=0)
+                {
+                    y0+=iny;
+                    e-=dx;
+                }
+                e+=dy;
+                x0+=inx;
+            }
+            
+        }
+        //not step line
+        else
+        {
+            dx<<=1;
+            uint8_t e = dx-dy;
+            dy<<=1;
+            while (y0!=y1)
+            {
+                //draw pixels
+                pixel(self, x0, y0, color);
+                if(e>=0)
+                {
+                    x0+=inx;
+                    e-=dy;
+                }
+                e+=dx;
+                y0+=iny;
+            }
+            
+        }
+    }
+    return mp_const_none;
+    
+}
+
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
 MP_DEFINE_CONST_FUN_OBJ_3(rgbcolor_obj, rgbcolor);
-MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
+//MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
 MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
+MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -612,8 +758,9 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_power), MP_ROM_PTR(&power_obj) },
     { MP_ROM_QSTR(MP_QSTR_backlight), MP_ROM_PTR(&backlight_obj) },
     { MP_ROM_QSTR(MP_QSTR_rgbcolor), MP_ROM_PTR(&rgbcolor_obj) },
-    { MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
+    //{ MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
     { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&rect_obj) },
+    { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
