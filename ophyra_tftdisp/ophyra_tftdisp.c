@@ -400,6 +400,21 @@ STATIC mp_obj_t vline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t h, uint16_
 }
 
 /*
+    pixel0(x, y, color) | Intern Function nos sirve para dibujar un solo pixel individual en la pantalla TFT
+    de tal forma que funciones de uso publico en python puedan mandar datos primitivos, 
+    para acelerar el proceso de trazado en el display tft.
+    
+*/
+STATIC mp_obj_t pixel0(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
+{
+    //Draw a single pixel0 on the display with given color.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    set_window(self, x, y, x+1, y+1);
+    write_pixels(1,color);
+    return mp_const_none;
+}
+
+/*
     st7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
         ST7735().init()
     En este caso habra un cambio el cual la funcion se invocara de la siguiente manera:
@@ -568,7 +583,22 @@ STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
     }
     return mp_const_none;
 }
-
+/*
+    pixel(x, y, color) nos sirve para dibujar un solo pixel individual en la pantalla TFT
+    Ejemplo en uPython:
+        tft.pixel(10,20,tft.rgbcolor(255,25,0))
+*/
+STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
+{
+    //Draw a single pixel on the display with given color.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint8_t x_int8=mp_obj_get_int(args[1]);
+    uint8_t y_int8=mp_obj_get_int(args[2]);
+    uint16_t color_int16=mp_obj_get_int(args[3]);
+    set_window(self, x_int8, y_int8, x_int8+1, y_int8+1);
+    write_pixels(1,color_int16);
+    return mp_const_none;
+}
 /*
     rgbcolor() funcion para establecer colores en la pantalla tft dado los
     parametros Red, Green, Blue.
@@ -584,20 +614,6 @@ STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
 }
 
 /*
-    pixel(x, y, color) nos sirve para dibujar un solo pixel individual en la pantalla TFT
-    Ejemplo en uPython:
-        tft.pixel(10,20,tft.rgbcolor(255,25,0))
-*/
-STATIC mp_obj_t pixel(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
-{
-    //Draw a single pixel on the display with given color.
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    set_window(self, x, y, x+1, y+1);
-    write_pixels(1,color);
-    return mp_const_none;
-}
-
-/*
     rect() Esta funcion nos sirve para la creacion de un
     cuadrilatero en el que a traves de las coordenadas x, y
     , la altura h, la anchura w y el color se implementa en 
@@ -605,6 +621,7 @@ STATIC mp_obj_t pixel(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
     Ejemplo de uso en uPython:
         tft.rect(10,20,50,60,tft.rgbcolor(23,0,254))
 */
+
 STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
 {
     //Draw a rectangle with specified coordinates/size and fill with color.
@@ -699,7 +716,7 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
             while (x0!=x1)
             {
                 //draw pixels
-                pixel(self, x0, y0, color);
+                pixel0(self, x0, y0, color);
                 if(e>=0)
                 {
                     y0+=iny;
@@ -719,7 +736,7 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
             while (y0!=y1)
             {
                 //draw pixels
-                pixel(self, x0, y0, color);
+                pixel0(self, x0, y0, color);
                 if(e>=0)
                 {
                     x0+=inx;
@@ -741,7 +758,7 @@ MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
 MP_DEFINE_CONST_FUN_OBJ_3(rgbcolor_obj, rgbcolor);
-//MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
+MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
 MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 
@@ -758,7 +775,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_power), MP_ROM_PTR(&power_obj) },
     { MP_ROM_QSTR(MP_QSTR_backlight), MP_ROM_PTR(&backlight_obj) },
     { MP_ROM_QSTR(MP_QSTR_rgbcolor), MP_ROM_PTR(&rgbcolor_obj) },
-    //{ MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
     { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
