@@ -1,21 +1,22 @@
 /*
     ophyra_mpu60.c
 
-    Modulo de usuario en C para la utilizacion del sensor MPU6050 de la tarjeta Ophyra, fabricada por
-    Intesc Electronica y Embebidos.
+    C usermod to use the MPU6050 sensor included in the Ophyra board, manufactured by
+    Intesc Electronica y Embebidos, located in Puebla, Pue. Mexico.
 
-    Este archivo incluye las funciones que leen de los registros del sensor los valores de aceleracion en el
-    eje X, Y y Z; y los valores del giroscopio en X, Y y Z; y el valor de la temperatura en grados Celcius.
-    Se utilizan las funciones i2c_writeto e i2c_read from para la comunicacion con el sensor mediante I2C.
+    This file includes the functions that read from the sensor registers the values of acceleration in the
+    X, Y, and Z axis; the values of the gyroscope in the X, Y, and Z axis; and the temperature value in Celsius
+    degrees. The "i2c_writeto" and "i2c_readfrom" functions are used for the communication with the sensor using
+    the I2C protocol.
 
-    Para construir el firmware incluyendo este modulo, ejecutar en Cygwin (desde la carpeta stm32 de micropython):
+    To build the Micropython firmware for the Ophyra board including this C usermod, use:
         make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_MPU60_ENABLED=1 all
 
-        En USER_C_MODULES se especifica el path hacia la localizacion de la carpeta modules, donde se encuentra
-        el archivo ophyra_mpu60.c y micropython.mk
+        In USER_C_MODULES the path to the "modules" folder is specified. Inside of it, there is the folder
+        "ophyra_mpu60", which contains the ophyra_mpu60.c and micropython.mk files.
 
-    Escrito por: Jonatan Salinas y Carlos Daniel.
-    Ultima fecha de modificacion: 21/03/2021.
+    Written by: Jonatan Salinas y Carlos Daniel.
+    Last modification: 21/03/2021.
 
 */
 
@@ -26,7 +27,7 @@
 
 #define MPU6050_OPHYRA_ADDRESS      (104)
 #define I2C_TIMEOUT_MS              (50)
-        //Definicion de los registros necesarios del sensor:
+        //Definition of the necessary sensor registers:
 #define MPU60_WHO_AM_I_REG          (117)
 #define MPU60_SMPLRT_DIV_REG        (25)
 #define POWER_MANAG_REG             (107)
@@ -50,10 +51,10 @@ const mp_obj_type_t mpu60_class_type;
 
 STATIC mpu60_class_obj_t mi_mpu60_obj;
 /*
-    Esta funcion imprime la informacion que la estructura mpu60_class_obj_t contiene en cierto momento.
-    Se invoca al escribir en micropython "print(obj)", ejemplo:
+    This function prints the information that the struct mpu60_class_obj_t contains in certain moment.
+    It is invoked when the MicroPython user writes "print(obj)", for example:
         SAG = MPU6050()
-        print(SAG)
+        print(SAG)        
 */
 STATIC void mpu60_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
@@ -69,9 +70,9 @@ STATIC void mpu60_class_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 }
 
 /*
-    Funcion que inicia el puerto 1 para la comunicacion I2C con el sensor.
-    Se lee el valor del registro WHO_AM_I para verificar la presencia del sensor. Si no se verifica
-    que esta disponible, sucede un error.
+    Function that initializes the port 1 for the IC2 communication with the sensor.
+    The value of the WHO_AM_I register is read, to verify the presence of the sensor. If its presence is not verified,
+    an error ocurrs.
 */
 STATIC void mpu60_start(void){
 
@@ -87,11 +88,11 @@ STATIC void mpu60_start(void){
 }
 
 /*
-    Funcion que se invoca al crear un nuevo objeto en el codigo de Micropython de tipo MPU6050(), ejemplo:
+    Function that is invoked when a new MPU6050() object is created in MicroPython, example:
         SAG = MPU6050()
 */
 STATIC mp_obj_t mpu60_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    //Verificacion del numero de argumentos.
+
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
     mi_mpu60_obj.base.type = &mpu60_class_type;
    
@@ -100,9 +101,9 @@ STATIC mp_obj_t mpu60_class_make_new(const mp_obj_type_t *type, size_t n_args, s
     return MP_OBJ_FROM_PTR(&mi_mpu60_obj);
 }
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         SAG.init(8,1000)
-    Sirve para ajustar el rango de funcionamiento del acelerometro y del giroscopio.
+    This function is for adjusting the accelerometer and gyroscope range.
 */
 STATIC mp_obj_t init_function(mp_obj_t self_in, mp_obj_t range_accel_config_obj, mp_obj_t range_gyr_config_obj) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -153,24 +154,24 @@ STATIC mp_obj_t init_function(mp_obj_t self_in, mp_obj_t range_accel_config_obj,
         mp_raise_ValueError(MP_ERROR_TEXT("Ingresaste un valor de rango equivocado para el giroscopio."));
     }
 
-    //Despierto el sensor
+    //Wake up the sensor
     uint8_t data0[2] = {POWER_MANAG_REG, 0};
     i2c_writeto(I2C1, MPU6050_OPHYRA_ADDRESS, data0, 2, true);
-    //Configuracion de la tasa de salida de datos (Data output rate or Sample Rate)
+    //Configuration of the Data output rate or Sample Rate
     uint8_t data1[2] = {MPU60_SMPLRT_DIV_REG, (uint8_t)(7)};
     i2c_writeto(I2C1, MPU6050_OPHYRA_ADDRESS, data1, 2, true);
-    //Configuracion del rango del acelerometro
+    //Configuration of the accelerometer range
     uint8_t data2[2] = {ACCEL_CONFIG_REG, (uint8_t)(env_accel_config)};
     i2c_writeto(I2C1, MPU6050_OPHYRA_ADDRESS, data2, 2, true);
-    //Configuracion del rango del giroscopio
+    //Configuration of the gyroscope range
     uint8_t data3[2] = {GYR_CONFIG_REG, (uint8_t)(env_gyr_config)};
     i2c_writeto(I2C1, MPU6050_OPHYRA_ADDRESS, data3, 2, true);
 
     return mp_obj_new_float(1);
 }
 /*
-    Funcion que lee los dos registros correspondientes a cierto eje del acelerometro o del giroscopio.
-    Se retorna el valor de aceleracion (en gravedades o G) o el valor del giroscopio (en °/seg) en ese eje.
+    Function that reads the two corresponding registers of certain accelerometer or gyroscope axis.
+    This function returns the acceleration value (G) or the gyroscope value (°/seg) in that axis.
 */
 STATIC mp_obj_t read_axis(int axis, float g_o_sin){
     uint8_t myAxis[1] = {(uint8_t)axis};
@@ -191,9 +192,9 @@ STATIC mp_obj_t read_axis(int axis, float g_o_sin){
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         x=SAG.accX()
-    Retorna el valor de aceleracion del sensor en el eje X.
+    Returns the acceleration value of the sensor in the X axis.
 */                                
 STATIC mp_obj_t get_accelerationX(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -201,9 +202,9 @@ STATIC mp_obj_t get_accelerationX(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         y=SAG.accY()
-    Retorna el valor de aceleracion del sensor en el eje Y.
+    Returns the acceleration value of the sensor in the Y axis.
 */   
 STATIC mp_obj_t get_accelerationY(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -211,9 +212,9 @@ STATIC mp_obj_t get_accelerationY(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         z=SAG.accZ()
-    Retorna el valor de aceleracion del sensor en el eje Z.
+    Returns the acceleration value of the sensor in the Z axis.
 */ 
 STATIC mp_obj_t get_accelerationZ(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -221,8 +222,8 @@ STATIC mp_obj_t get_accelerationZ(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que lee los registros de temperatura del sensor. Se calcula el valor de temperatura en grados
-    Celcius y se retorna ese valor. Se invoca al escribir en Micropython una linea como esta:
+    Function that reads the temperature registers of the sensor. The temperature value in Celcius degrees is
+    calculated and returned. This function is invoked when writing in MicroPython something like this:
         tmp=SAG.temp()
 */ 
 STATIC mp_obj_t get_temperature(mp_obj_t self_in) {
@@ -240,9 +241,9 @@ STATIC mp_obj_t get_temperature(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         gx=SAG.gyrX()
-    Retorna el valor del giroscopio del sensor en el eje X.
+    Returns the gyroscope value of the sensor in the X axis.
 */
 STATIC mp_obj_t get_gyroscopeX(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -250,9 +251,9 @@ STATIC mp_obj_t get_gyroscopeX(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         gy=SAG.gyrY()
-    Retorna el valor del giroscopio del sensor en el eje Y.
+    Returns the gyroscope value of the sensor in the Y axis.
 */
 STATIC mp_obj_t get_gyroscopeY(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -260,9 +261,9 @@ STATIC mp_obj_t get_gyroscopeY(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que se invoca al escribir en el codigo de Micropython una linea como esta:
+    Function that is invoked when the MicroPython user writes something like this:
         gz=SAG.gyrZ()
-    Retorna el valor del giroscopio del sensor en el eje Z.
+    Returns the gyroscope value of the sensor in the Z axis.
 */
 STATIC mp_obj_t get_gyroscopeZ(mp_obj_t self_in) {
     mpu60_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -270,7 +271,7 @@ STATIC mp_obj_t get_gyroscopeZ(mp_obj_t self_in) {
 }
 
 /*
-    Funcion que permite escribir un byte de informacion a un registro especifico del sensor.
+    Function that allows to write a byte of information to a specific register of the sensor.
 */
 STATIC mp_obj_t write_function(mp_obj_t self_in, mp_obj_t num_obj, mp_obj_t address_obj) {
     int numero_a_escribir = mp_obj_get_int(num_obj);
@@ -283,8 +284,8 @@ STATIC mp_obj_t write_function(mp_obj_t self_in, mp_obj_t num_obj, mp_obj_t addr
 }
 
 /*
-    Funcion que permite leer un byte de informacion de un registro especifico del sensor.
-    Retorna el valor leido del registro.
+    Function that allows to read a byte of information from a specific register of the sensor.
+    It returns the read value of the register.
 */
 STATIC mp_obj_t read_function(mp_obj_t self_in, mp_obj_t address_obj) {
     int direccion_a_leer = mp_obj_get_int(address_obj);
@@ -332,9 +333,9 @@ const mp_obj_type_t mpu60_class_type = {
 };
 
 STATIC const mp_rom_map_elem_t ophyra_mpu60_globals_table[] = {
-                                                    //Nombre del archivo (User C module)
+                                                    //Name of this C usermod file
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_ophyra_mpu60) },
-            //Nombre de la clase        //Nombre del "tipo" asociado.
+            //Name of the class        //Name of the associated "type"
     { MP_ROM_QSTR(MP_QSTR_MPU6050), MP_ROM_PTR(&mpu60_class_type) },
 };
 
@@ -346,7 +347,7 @@ const mp_obj_module_t ophyra_mpu60_user_cmodule = {
     .globals = (mp_obj_dict_t *)&mp_module_ophyra_mpu60_globals,
 };
 
-// Registro del modulo para hacerlo disponible para Python.
-//                      nombreArchivo, nombreArchivo_user_cmodule, MODULE_IDENTIFICADOR_ENABLED
+// We need to register the module to make it available for Python.
+//                          nameOfTheFile, nameOfTheFile_user_cmodule, MODULE_IDENTIFIER_ENABLED
 MP_REGISTER_MODULE(MP_QSTR_ophyra_mpu60, ophyra_mpu60_user_cmodule, MODULE_OPHYRA_MPU60_ENABLED);
 
