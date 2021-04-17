@@ -18,9 +18,12 @@
 
 */
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "py/runtime.h"
 #include "py/obj.h"
+#include "py/objstr.h"
 #include "py/mphal.h"          
 #include "ports/stm32/spi.h"
 /*
@@ -106,7 +109,7 @@ const pin_obj_t *Pin_BL=pin_A7;
 #define BITS            (8)
 #define FIRSTBIT        (0x00000000U)
 
-#define TIMEOUT_SPI     (5000)
+#define TIMEOUT_SPI     (1000)
 //#define SPI1            (1)
 
 
@@ -117,7 +120,7 @@ const pin_obj_t *Pin_BL=pin_A7;
 #define HEIGHT      (8)
 #define START       (32)
 #define END         (127)
-static const uint8_t Font[]=
+const uint8_t Font[]=
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00, 0x00, 0x06, 0x5F, 0x06, 0x00,
@@ -281,7 +284,9 @@ STATIC void write_cmd(int cmd)
     mp_hal_pin_low(Pin_DC);
     mp_hal_pin_low(Pin_CS);
     //definimos un espacio de tamaño de 1 byte
-    spi_transfer(&spi_obj[0],1, (const uint8_t *)cmd, NULL, TIMEOUT_SPI);
+    uint8_t aux[1]={(uint8_t)cmd};
+    spi_transfer(&spi_obj[0],1, aux, NULL, TIMEOUT_SPI);
+    printf("Se supone que mande un solo comando %x \n", aux[0]);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -297,6 +302,7 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
     spi_transfer(&spi_obj[0],len, data, NULL, TIMEOUT_SPI);
+    printf("Se supone que mande una trama de datos\n");
     mp_hal_pin_high(Pin_CS);
 }
 /*
@@ -358,6 +364,7 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
         //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
         //siempre se mandan 2 bytes a esta funcion
         spi_transfer(&spi_obj[0],2,data_transfer, NULL, TIMEOUT_SPI);
+        printf("Estoy mandando pixeles segun");
     }
     mp_hal_pin_high(Pin_CS);
 }
@@ -411,6 +418,30 @@ STATIC mp_obj_t pixel0(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     set_window(self, x, y, x+1, y+1);
     write_pixels(1,color);
+    return mp_const_none;
+}
+/*
+    rect_int | Intern Function is the same with functio rect only receive primitive
+    params.
+*/
+STATIC mp_obj_t rect_int(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint16_t color)
+{
+    //Draw a rectangle with specified coordinates/size and fill with color.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(x>=self->width || y>=self->height)
+    {
+        return mp_const_none;
+    }
+    if((x+w-1) >= self->width)
+    {
+        w=self->width-x;
+    }
+    if((y+h-1)>=self->height)
+    {
+        h=self->height-y;
+    }
+    set_window(self, x, y, x+w-1, y+h-1);
+    write_pixels((w*h), color);
     return mp_const_none;
 }
 
@@ -469,7 +500,7 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
     write_cmd(CMD_INVOFF);
     write_cmd(CMD_MADCTL);
 
-    if(orient==mp_const_none || orient==mp_const_true)
+    if(!orient)
     {
         uint8_t data_orient[]={0xA0};
         write_data(data_orient, sizeof(data_orient));
@@ -508,6 +539,8 @@ STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
 
     write_cmd(CMD_DISPON);
     mp_hal_delay_ms(100);
+    //DEBUG
+    printf("width: %u, height: %u \n",self->width, self->height);
     
     return mp_const_none;
 }
@@ -592,9 +625,10 @@ STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
 {
     //Draw a single pixel on the display with given color.
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    uint8_t x_int8=mp_obj_get_int(args[1]);
-    uint8_t y_int8=mp_obj_get_int(args[2]);
+    uint8_t x_int8=(uint8_t)mp_obj_get_int(args[1]);
+    uint8_t y_int8=(uint8_t)mp_obj_get_int(args[2]);
     uint16_t color_int16=mp_obj_get_int(args[3]);
+    printf("%u , %u, %u", x_int8, y_int8, color_int16);
     set_window(self, x_int8, y_int8, x_int8+1, y_int8+1);
     write_pixels(1,color_int16);
     return mp_const_none;
@@ -603,13 +637,13 @@ STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
     rgbcolor() funcion para establecer colores en la pantalla tft dado los
     parametros Red, Green, Blue.
 */
-STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
+STATIC mp_obj_t rgbcolor(size_t n_args, const mp_obj_t *args)
 {
     //Pack 24-bit RGB into 16-bit value.
     uint8_t red, green, blue;
-    red=mp_obj_get_int(r);
-    green=mp_obj_get_int(g);
-    blue=mp_obj_get_int(b);
+    red=mp_obj_get_int(args[1]);
+    green=mp_obj_get_int(args[2]);
+    blue=mp_obj_get_int(args[3]);
     return mp_obj_new_int(((red & 0xF8) << 8) | ((green & 0xFC) << 3 ) | (blue >> 3));
 }
 
@@ -625,7 +659,7 @@ STATIC mp_obj_t rgbcolor(mp_obj_t r, mp_obj_t g, mp_obj_t b)
 STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
 {
     //Draw a rectangle with specified coordinates/size and fill with color.
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    tftdisp_class_obj_t *self = args[0];
     uint8_t x=mp_obj_get_int(args[1]);
     uint8_t y=mp_obj_get_int(args[2]);
     uint8_t w=mp_obj_get_int(args[3]);
@@ -752,15 +786,126 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
     
 }
 
+/*
+    char() | Intern Function esta funcion pone un solo caracter en la pantalla
+    tft, esta funcion es dependencia de la funcion text()
+*/
+STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16_t color, uint8_t sizex, uint8_t sizey)
+{
+    //Draw a character at a given position using the user font.
+    //Font is a data dictionary, can be scaled with sizex and sizey.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    //Font is define not necesary put parameter in this function
+    uint8_t startchar=START;
+    uint8_t endchar=END;
+    uint16_t ci=(uint16_t)ch;
+    if(!sizex && !sizey)
+    {
+        //this is by defect in the function uPython
+        sizex=1;
+        sizey=1;
+    }
+
+    if(startchar<=ci || ci<=endchar)
+    {
+        uint8_t width=WIDTH;
+        uint8_t height=HEIGHT;
+        ci=(ci-startchar)*width;
+        // this the equivalent to ch = font['data'][ci:ci + width]
+        uint8_t ch[6];
+        for(uint8_t i=0;i<width;i++)
+        {
+            ch[i]=Font[ci];
+            ci++;
+            printf("%x ",ch[i]);
+        }
+        
+        //end to equivalent
+        //no font scaling
+        uint8_t px=x;
+        if(sizex<=1 && sizey<=1)
+        {
+            for(uint8_t c=0; c<width;c++)
+            {
+                uint8_t py=y;
+                for(uint8_t i=0; i<height;i++)
+                {
+                    if(ch[c]&0x01)
+                    {
+                        pixel0(self, px, py, color);
+                    }
+                    py+=1;
+                    c>>=1;
+                }
+                px+=1;
+            }
+        }
+        //scale to given sizes
+        else
+        {
+            for(uint8_t c=0;c<width;c++)
+            {
+                uint8_t py=y;
+                for(uint8_t i=0; i<height;i++)
+                {
+                    if(ch[c]&0x01)
+                    {
+                        
+                        rect_int(self, px, py, sizex, sizey, color);
+                        py+=sizey;
+                        c>>=1;
+                    }
+                }
+                px+=sizex;
+            }
+        }
+    }
+        // character not found in this font
+        return mp_const_none;
+} 
+
+/*
+    text()
+*/
+STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
+{
+    //Draw text at a given position using the user font.
+    //Font can be scaled with the size parameter.
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint8_t x=mp_obj_get_int(args[1]);
+    uint8_t y=mp_obj_get_int(args[2]);
+    mp_check_self(mp_obj_is_str_or_bytes(args[3]));
+    GET_STR_DATA_LEN(args[3], str, str_len);
+    char string[str_len];
+    uint16_t color=mp_obj_get_int(args[4]);
+    uint8_t width=WIDTH+1;
+    strcpy(string, (char *)str);
+
+    uint8_t px=x;
+    for(uint8_t i=0;i<str_len;i++)
+    {
+        charfunc(self, px, y, string[i], color, 1, 1);
+        px+=width;
+        // wrap the text to the next line if it reaches the end
+        if(px+width>self->width)
+        {
+            y+=HEIGHT+1;
+            px=x;
+        }
+    }
+    return mp_const_none;
+
+}
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
-MP_DEFINE_CONST_FUN_OBJ_3(rgbcolor_obj, rgbcolor);
-MP_DEFINE_CONST_FUN_OBJ_VAR(pixel_obj, 4, pixel);
-MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rgbcolor_obj,4 , 4, rgbcolor);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pixel_obj, 4, 4, pixel);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rect_obj, 6, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
+MP_DEFINE_CONST_FUN_OBJ_VAR(text_obj, 6, text);
 
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
@@ -778,6 +923,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_pixel), MP_ROM_PTR(&pixel_obj) },
     { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&text_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
