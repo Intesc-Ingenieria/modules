@@ -102,6 +102,7 @@ const pin_obj_t *Pin_BL=pin_A7;
 /*
     SPI1 Conf
 */
+/*
 #define PRESCALE        (2)
 #define BAUDRATE        (8000000)
 #define POLARITY        (1)
@@ -109,10 +110,10 @@ const pin_obj_t *Pin_BL=pin_A7;
 #define BITS            (8)
 #define FIRSTBIT        (0x00000000U)
 
-#define TIMEOUT_SPI     (1000)
+
 //#define SPI1            (1)
-
-
+*/
+#define TIMEOUT_SPI     (5000)
 /*
     Font Lib implemented here.
 */
@@ -225,6 +226,7 @@ const uint8_t Font[]=
 */
 typedef struct _tftdisp_class_obj_t{
     mp_obj_base_t base;
+    const spi_t *spi;
     bool power_on;
     bool inverted;
     bool backlight_on;
@@ -263,10 +265,23 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     //inicialiacion de las columnas y filas del display TFT
     self->margin_row=0;
     self->margin_col=0;
-
+    self->spi=&spi_obj[0];
     // Configuraciones de la comunicacion SPI
-    spi_set_params(&spi_obj[0], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
-    spi_init(&spi_obj[0],false);
+    //spi_set_params(&spi_obj[0], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
+    SPI_InitTypeDef *init = &self->spi->spi->Init;
+    init->Mode = SPI_MODE_MASTER;
+    // data is sent bigendian, latches on rising clock
+    init->BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    init->CLKPolarity = SPI_POLARITY_HIGH;
+    init->CLKPhase = SPI_PHASE_2EDGE;
+    init->Direction = SPI_DIRECTION_2LINES;
+    init->DataSize = SPI_DATASIZE_8BIT;
+    init->NSS = SPI_NSS_SOFT;
+    init->FirstBit = SPI_FIRSTBIT_MSB;
+    init->TIMode = SPI_TIMODE_DISABLED;
+    init->CRCCalculation = SPI_CRCCALCULATION_DISABLED;
+    init->CRCPolynomial = 0;
+    spi_init(self->spi,false);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -286,7 +301,7 @@ STATIC void write_cmd(int cmd)
     //definimos un espacio de tamaño de 1 byte
     uint8_t aux[1]={(uint8_t)cmd};
     spi_transfer(&spi_obj[0],1, aux, NULL, TIMEOUT_SPI);
-    printf("Se supone que mande un solo comando %x \n", aux[0]);
+    //printf("Se supone que mande un solo comando %x \n", aux[0]);
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -302,7 +317,7 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
     spi_transfer(&spi_obj[0],len, data, NULL, TIMEOUT_SPI);
-    printf("Se supone que mande una trama de datos\n");
+    //printf("Se supone que mande una trama de datos\n");
     mp_hal_pin_high(Pin_CS);
 }
 /*
@@ -364,7 +379,7 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
         //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
         //siempre se mandan 2 bytes a esta funcion
         spi_transfer(&spi_obj[0],2,data_transfer, NULL, TIMEOUT_SPI);
-        printf("Estoy mandando pixeles segun");
+        //printf("Estoy mandando pixeles segun");
     }
     mp_hal_pin_high(Pin_CS);
 }
@@ -452,95 +467,136 @@ STATIC mp_obj_t rect_int(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint
         ST7735().init(True)
 
 */
-STATIC mp_obj_t st7735_init(mp_obj_t self_in, mp_obj_t orient)
+STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
 {
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     //mp_obj_is_bool(orient);
     //primer hard reset 
+    printf("Antes de Reset\n");
+
     reset(); //function here
+    
+    printf("Despues de Reset\n");
     write_cmd(CMD_SWRESET);
+    printf("Dato SWRESET send\n");
     mp_hal_delay_ms(150);
     write_cmd(CMD_SLPOUT);
+    printf("Dato SLPOUT send\n");
     mp_hal_delay_ms(255);
 
     //Optimizacion de la transmision de datos y delays
     write_cmd(CMD_FRMCTR1);
+    printf("Dato FRMCTR1 send\n");
     //convertirlo en array dinamico?
     uint8_t data_set3[]={0x01, 0x2C, 0x2D};
     write_data(data_set3, sizeof(data_set3));
+    printf("Dato data_set3 send\n");
     write_cmd(CMD_FRMCTR2);
+    printf("Dato FRMCTR2 send\n");
     uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
     write_data(data_set6, sizeof(data_set6));
+    printf("Dato data_set6 send\n");
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_INVCTR);
+    printf("Dato INVCTR send\n");
     uint8_t data_set1[]={0x07};
     write_data(data_set1, sizeof(data_set1));
+    printf("Dato data_set1 send\n");
     
     write_cmd(CMD_PWCTR1);
+    printf("Dato PWCTR1 send\n");
     uint8_t dataset[]={0xA2, 0x02, 0x84};
     write_data(dataset, sizeof(dataset));
+    printf("Dato dataset send\n");
     write_cmd(CMD_PWCTR2);
+    printf("Dato PWCTR2 send\n");
     uint8_t dataset1[]={0xC5};
     write_data(dataset1, sizeof(dataset1));
+    printf("Dato dataset1 send\n");
     write_cmd(CMD_PWCTR3);
+    printf("Dato PWCTR3 send\n");
     uint8_t dataset2[]={0x8A, 0x00};
     write_data(dataset2, sizeof(dataset2));
+    printf("Dato dataset2 send\n");
     write_cmd(CMD_PWCTR4);
+    printf("Dato PWCTR4 send\n");
     uint8_t dataset3[]={0x8A, 0x2A};
     write_data(dataset3, sizeof(dataset3));
+    printf("Dato dataset3 send\n");
     write_cmd(CMD_PWCTR5);
+    printf("Dato PWCTR5 send\n");
     uint8_t dataset4[]={0x8A, 0xEE};
     write_data(dataset4, sizeof(dataset4));
-    
+    printf("Dato dataset4 send\n");
+
     write_cmd(CMD_VMCTR1);
+    printf("Dato VMCTR1 send\n");
     uint8_t data_vmc[]={0x0E};
     write_data(data_vmc, sizeof(data_vmc));
-
+    printf("Dato data_vmc send\n");
     write_cmd(CMD_INVOFF);
+    printf("Dato INVOFF send\n");
     write_cmd(CMD_MADCTL);
+    printf("Dato MADCTL send\n");
 
-    if(!orient)
+    if(args[1]==0)
     {
         uint8_t data_orient[]={0xA0};
         write_data(data_orient, sizeof(data_orient));
+        printf("Dato data_orient send\n");
         self->width=160;
         self->height=128;
+        printf("width: %d, height: %d \n",self->width, self->height);
     }
     else
     {
         uint8_t datas[]={0x00};
         write_data(datas, sizeof(datas));
+        printf("Dato datas send\n");
         self->width=128;
         self->height=160;
+        printf("width: %d, height: %d \n",self->width, self->height);
     }
     write_cmd(CMD_COLMOD);
+    printf("Dato COLMOD send\n");
     uint8_t dataset0[]={0x05};
     write_data(dataset0, sizeof(dataset0));
+    printf("Dato dataset0 send\n");
 
     write_cmd(CMD_CASET);
+    printf("Dato CASET send\n");
     uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
     write_data(dataset5, sizeof(dataset5));
+    printf("Dato dataset5 send\n");
 
     write_cmd(CMD_RASET);
+    printf("Dato RASET send\n");
     uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
     write_data(dataset6, sizeof(dataset6));
+    printf("Dato dataset6 send\n");
     
     write_cmd(CMD_GMCTRP1);
+    printf("Dato GMCTRP1 send\n");
     uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
     write_data(dataset7, sizeof(dataset7));
+    printf("Dato dataset7 send\n");
 
     write_cmd(CMD_GMCTRN1);
+    printf("Dato GMCTRN1 send\n");
     uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
     write_data(dataset8, sizeof(dataset8));
+    printf("Dato dataset8 send\n");
 
     write_cmd(CMD_NORON);
+    printf("Dato NORON send\n");
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_DISPON);
+    printf("Dato DISPON send\n");
     mp_hal_delay_ms(100);
     //DEBUG
-    printf("width: %u, height: %u \n",self->width, self->height);
+    //printf("width: %u, height: %u \n",self->width, self->height);
     
     return mp_const_none;
 }
@@ -576,19 +632,21 @@ STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
 {
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-    if(state==mp_const_none)
+    if(state==0)
     {
         return mp_obj_new_bool(self->inverted?1:0);
     }
-    if(state==mp_const_true || (mp_int_t)state==1)
+    if(state==mp_const_true || state==mp_obj_new_int(1))
     {
         write_cmd(CMD_INVON);
+        printf("Invertimos la pantalla\n");
         self->inverted=true;
     }
     else
     {
         write_cmd(CMD_INVOFF);
         self->inverted=false;
+        printf("Quitamos la inversion de la pantalla\n");
     }
     
     return mp_const_none;
@@ -604,7 +662,7 @@ STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
     {
         return mp_obj_new_bool(self->backlight_on?1:0);
     }
-    if((mp_int_t)state==1 || state==mp_const_true)
+    if(state==mp_obj_new_int(1) || state==mp_const_true)
     {
         mp_hal_pin_high(Pin_BL);
         self->backlight_on=true;
@@ -877,9 +935,10 @@ STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
     mp_check_self(mp_obj_is_str_or_bytes(args[3]));
     GET_STR_DATA_LEN(args[3], str, str_len);
     char string[str_len];
+    strcpy(string, (char *)str);
     uint16_t color=mp_obj_get_int(args[4]);
     uint8_t width=WIDTH+1;
-    strcpy(string, (char *)str);
+    
 
     uint8_t px=x;
     for(uint8_t i=0;i<str_len;i++)
@@ -896,8 +955,18 @@ STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
     return mp_const_none;
 
 }
+/*
+
+*/
+STATIC mp_obj_t clear(mp_obj_t self_in, mp_obj_t color)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    uint16_t color16b=mp_obj_get_int(color);
+    rect_int(self, 0, 0, 160, 128, color16b);
+    return mp_const_none;
+}
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
-MP_DEFINE_CONST_FUN_OBJ_2(st7735_init_obj, st7735_init);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(st7735_init_obj, 1, 2, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
 MP_DEFINE_CONST_FUN_OBJ_2(backlight_obj, backlight);
@@ -906,7 +975,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pixel_obj, 4, 4, pixel);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rect_obj, 6, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 MP_DEFINE_CONST_FUN_OBJ_VAR(text_obj, 6, text);
-
+MP_DEFINE_CONST_FUN_OBJ_2(clear_obj, clear);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
@@ -924,6 +993,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&text_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&clear_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
