@@ -805,6 +805,8 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
 */
 STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16_t color, uint8_t sizex, uint8_t sizey)
 {
+    printf("       Estoy en charfunc!  ch: %c\n", ch);
+
     //Draw a character at a given position using the user font.
     //Font is a data dictionary, can be scaled with sizex and sizey.
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -812,8 +814,19 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
     uint8_t startchar=START;
     uint8_t endchar=END;
     uint16_t ci=(uint16_t)ch;
+
+    printf("  Params:\n");
+    printf("  x: %d\n", x);
+    printf("  y: %d\n", y);
+    printf("  ch: %c\n", ch);
+    printf("  color: %d\n", color);
+    printf("  sizex: %d\n", sizex);
+    printf("  sizey: %d\n", sizey);
+    printf("  ci: %d\n", ci);           //Revisar bien conversion ASCII to UNICODE
+
     if(!sizex && !sizey)
     {
+        printf("  xd\n");
         //this is by defect in the function uPython
         sizex=1;
         sizey=1;
@@ -824,50 +837,64 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
         //uint8_t width=WIDTH;
         //uint8_t height=HEIGHT;
         ci=(ci-startchar)*WIDTH;
+        printf("  ci modificada: %d\n", ci);
+
         // this the equivalent to ch = font['data'][ci:ci + width]
         uint8_t ch[6];
         for(uint8_t i=0;i<WIDTH;i++)
         {
             ch[i]=Font[ci];
             ci++;
-            printf("%x ",ch[i]);
+            printf("  Puse: %x \n",ch[i]);
         }
-        
         //end to equivalent
+        
         //no font scaling
         uint8_t px=x;
+        printf("  px: %d\n", px);
+
         if(sizex<=1 && sizey<=1)
         {
-            for(uint8_t c=0; c<WIDTH;c++)
+            printf("  Aca ando\n");
+            for(uint8_t k=0; k<WIDTH;k++)
             {
                 uint8_t py=y;
+                //printf("k: %d  px: %d   py: %d\n", k, px, py);
+
+                char temp = ch[k];
                 for(uint8_t i=0; i<HEIGHT;i++)
                 {
-                    if(ch[c]&0x01)
+                    if(temp&0x01)
                     {
+                        //printf("  Pongo pixel en px: %d py: %d\n", px, py);
                         pixel0(self, px, py, color);
                     }
                     py+=1;
-                    c>>=1;
+                    temp>>=1;
                 }
                 px+=1;
+
+                //mp_hal_delay_us(100000);
             }
         }
-        //scale to given sizes
-        else
+        else //scale to given sizes
         {
+            printf("  Que show\n");
             for(uint8_t c=0;c<WIDTH;c++)
             {
                 uint8_t py=y;
+                printf("  py: %d\n", py);
+
                 for(uint8_t i=0; i<HEIGHT;i++)
                 {
                     if(ch[c]&0x01)
                     {
-                        
+                        printf("  Dibujo rect: \n");
                         rect_int(self, px, py, sizex, sizey, color);
-                        py+=sizey;
-                        c>>=1;
                     }
+                    
+                    py+=sizey;
+                    c>>=1;
                 }
                 px+=sizex;
             }
@@ -882,22 +909,32 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
 */
 STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
 {
+    printf("Entre a text\n");
     //Draw text at a given position using the user font.
     //Font can be scaled with the size parameter.
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    uint8_t x=mp_obj_get_int(args[1]);
-    uint8_t y=mp_obj_get_int(args[2]);
+    uint8_t x = mp_obj_get_int(args[1]);
+    printf("x: %d\n", x);
+    uint8_t y = mp_obj_get_int(args[2]);
+    printf("y: %d\n", y);
+
     mp_check_self(mp_obj_is_str_or_bytes(args[3]));
     GET_STR_DATA_LEN(args[3], str, str_len);
     char string[str_len];
     strcpy(string, (char *)str);
-    uint16_t color=mp_obj_get_int(args[4]);
+    printf("Mi string es: %s\n", string);
+
+    uint16_t color = mp_obj_get_int(args[4]);
+    printf("Color: %d\n", color);
+
     uint8_t width=WIDTH+1;
     
 
     uint8_t px=x;
+    printf("Voy a entrar al for\n");
     for(uint8_t i=0;i<str_len;i++)
     {
+        printf("i es: %d\n", i);
         charfunc(self, px, y, string[i], color, 1, 1);
         px+=width;
         // wrap the text to the next line if it reaches the end
@@ -970,7 +1007,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rgbcolor_obj,4 , 4, rgbcolor);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pixel_obj, 4, 4, pixel);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rect_obj, 6, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
-MP_DEFINE_CONST_FUN_OBJ_VAR(text_obj, 6, text);
+MP_DEFINE_CONST_FUN_OBJ_VAR(text_obj, 5, text);
 MP_DEFINE_CONST_FUN_OBJ_2(clear_obj, clear);
 MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
 /*
