@@ -26,6 +26,7 @@
 #include "py/objstr.h"
 #include "py/mphal.h"          
 #include "ports/stm32/spi.h"
+//#include "lib/oofatfs/ff.h"
 /*
     Definicion de los Comandos
 */
@@ -101,17 +102,6 @@ const pin_obj_t *Pin_BL=pin_A7;
 
 /*
     SPI1 Conf
-*/
-/*
-#define PRESCALE        (2)
-#define BAUDRATE        (8000000)
-#define POLARITY        (1)
-#define PHASE           (0)
-#define BITS            (8)
-#define FIRSTBIT        (0x00000000U)
-
-
-//#define SPI1            (1)
 */
 #define TIMEOUT_SPI     (5000)
 /*
@@ -270,7 +260,6 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     //spi_set_params(&spi_obj[0], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
     SPI_InitTypeDef *init = &self->spi->spi->Init;
     init->Mode = SPI_MODE_MASTER;
-    // data is sent bigendian, latches on rising clock
     init->BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
     init->CLKPolarity = SPI_POLARITY_HIGH;
     init->CLKPhase = SPI_PHASE_2EDGE;
@@ -341,7 +330,7 @@ STATIC void set_window(mp_obj_t self_in, uint8_t x0, uint8_t y0, uint8_t x1, uin
 
     // set column XSTART/XEND
     write_cmd(CMD_CASET);
-    uint8_t bytes_send1[]={0x00, y0 + self->margin_col, 0x00, y1 + self->margin_col};
+    uint8_t bytes_send1[]={0x00, x0 + self->margin_col, 0x00, x1 + self->margin_col};
     write_data(bytes_send1, sizeof(bytes_send1));
 
     // write addresses to RAM
@@ -363,7 +352,10 @@ STATIC void reset(void)
 }
 
 /*
-    write_pixels() intern function | Sirve para  
+    write_pixels() intern function | Sirve para dibujar un pixel en el display
+    de tal forma que todas las funciones necesitan a esta funcion para dibujar
+    en pantalla los pixeles deseados rebiendo en si el tamaño de pixeles a dibujar
+    y el color.
 */
 
 STATIC void write_pixels(uint16_t count, uint16_t color)
@@ -473,9 +465,7 @@ STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
     //mp_obj_is_bool(orient);
     //primer hard reset 
     printf("Antes de Reset\n");
-
     reset(); //function here
-    
     printf("Despues de Reset\n");
     write_cmd(CMD_SWRESET);
     printf("Dato SWRESET send\n");
@@ -786,59 +776,24 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
     else
     {   
         //Comienzo del algoritmo de Bresenham's
-        uint8_t dx=abs(x1-x0);
-        uint8_t dy=abs(y1-y0);
-        uint8_t inx, iny;
-        if((x1-x0)>0 && (y1-y0)>0)
-        {
-            inx=1;
-            iny=1;
-        }
-        else
-        {
-            inx=-1;
-            iny=-1;
-        }
-        //step line
-        if(dx>=dy)
-        {
-            dy<<=1;
-            uint8_t e = dy-dx;
-            dx<<=1;
-            while (x0!=x1)
-            {
-                //draw pixels
-                pixel0(self, x0, y0, color);
-                if(e>=0)
-                {
-                    y0+=iny;
-                    e-=dx;
-                }
-                e+=dy;
-                x0+=inx;
+        int dx = abs(x1-x0), inx = x0<x1 ? 1 : -1;
+        int dy = abs(y1-y0), iny = y0<y1 ? 1 : -1; 
+        int err = (dx>dy ? dx : -dy)/2, e2;
+ 
+        while(1){
+            pixel0(self, x0, y0, color);
+            if (x0==x1 && y0==y1) break;
+            e2 = err;
+            if(e2 >-dx) 
+            { 
+                err -= dy; 
+                x0 += inx; 
             }
-            
-        }
-        //not step line
-        else
-        {
-            dx<<=1;
-            uint8_t e = dx-dy;
-            dy<<=1;
-            while (y0!=y1)
-            {
-                //draw pixels
-                pixel0(self, x0, y0, color);
-                if(e>=0)
-                {
-                    x0+=inx;
-                    e-=dy;
-                }
-                e+=dx;
-                y0+=iny;
+            if(e2 < dy) 
+            { 
+                err += dx;
+                y0 += iny; }
             }
-            
-        }
     }
     return mp_const_none;
     
@@ -864,14 +819,14 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
         sizey=1;
     }
 
-    if(startchar<=ci || ci<=endchar)
+    if(startchar<=ci && ci<=endchar)
     {
-        uint8_t width=WIDTH;
-        uint8_t height=HEIGHT;
-        ci=(ci-startchar)*width;
+        //uint8_t width=WIDTH;
+        //uint8_t height=HEIGHT;
+        ci=(ci-startchar)*WIDTH;
         // this the equivalent to ch = font['data'][ci:ci + width]
         uint8_t ch[6];
-        for(uint8_t i=0;i<width;i++)
+        for(uint8_t i=0;i<WIDTH;i++)
         {
             ch[i]=Font[ci];
             ci++;
@@ -883,10 +838,10 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
         uint8_t px=x;
         if(sizex<=1 && sizey<=1)
         {
-            for(uint8_t c=0; c<width;c++)
+            for(uint8_t c=0; c<WIDTH;c++)
             {
                 uint8_t py=y;
-                for(uint8_t i=0; i<height;i++)
+                for(uint8_t i=0; i<HEIGHT;i++)
                 {
                     if(ch[c]&0x01)
                     {
@@ -901,10 +856,10 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
         //scale to given sizes
         else
         {
-            for(uint8_t c=0;c<width;c++)
+            for(uint8_t c=0;c<WIDTH;c++)
             {
                 uint8_t py=y;
-                for(uint8_t i=0; i<height;i++)
+                for(uint8_t i=0; i<HEIGHT;i++)
                 {
                     if(ch[c]&0x01)
                     {
@@ -962,8 +917,49 @@ STATIC mp_obj_t clear(mp_obj_t self_in, mp_obj_t color)
 {
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint16_t color16b=mp_obj_get_int(color);
-    rect_int(self, 0, 0, 160, 128, color16b);
+    rect_int(self, 0, 0, self->width, self->height, color16b);
     return mp_const_none;
+}
+
+/*
+  show_image()   
+*/
+STATIC mp_obj_t show_image(size_t n_args, const mp_obj_t *args)
+{   
+    //tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    /*
+        Se supone que yo recibo el puntero pero de alguna manera que
+        es lo que tengo que hacer con el ?
+        ya esta almacenado, pero en la funcion no tiene ningun uso especifico
+    */
+    /*
+    mp_check_self(mp_obj_is_str_or_bytes(args[1]));
+    GET_STR_DATA_LEN(args[1], str, str_len);  
+    FIL fil;
+    FATFS fatfs;
+    UINT br;
+    //traspaso el obj str a char en C
+    char name[str_len];
+    strcpy(name, (char *)str);
+    FRESULT file;
+    file=f_mount(&fatfs);
+    if(file!=FR_OK)
+    {
+        printf("mount error\n");
+        return mp_const_none;
+    }
+    file=f_open(&fatfs, &fil, name, FA_OPEN_EXISTING|FA_READ);
+    if(file!=FR_OK)
+    {
+        printf("No such file\n");
+        return mp_const_none;
+    }
+    char buff[(uint)f_size(&fil)];
+    file=f_read(&fil,buff,f_size(&fil),&br);
+    */
+    return mp_const_none;
+
+    
 }
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(st7735_init_obj, 1, 2, st7735_init);
@@ -976,6 +972,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rect_obj, 6, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 MP_DEFINE_CONST_FUN_OBJ_VAR(text_obj, 6, text);
 MP_DEFINE_CONST_FUN_OBJ_2(clear_obj, clear);
+MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
@@ -994,6 +991,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&text_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&clear_obj) },
+    { MP_ROM_QSTR(MP_QSTR_show_image), MP_ROM_PTR(&show_image_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
