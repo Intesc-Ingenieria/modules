@@ -14,7 +14,7 @@
         el archivo ophyra_tftdisp.c y micropython.mk
 
     Escrito por: Jonatan Salinas y Carlos D. Hernández.
-    Ultima fecha de modificacion: 07/04/2021.
+    Ultima fecha de modificacion: 22/04/2021.
 
 */
 
@@ -290,7 +290,7 @@ STATIC void write_cmd(int cmd)
     //definimos un espacio de tamaño de 1 byte
     uint8_t aux[1]={(uint8_t)cmd};
     spi_transfer(&spi_obj[0],1, aux, NULL, TIMEOUT_SPI);
-    //printf("Se supone que mande un solo comando %x \n", aux[0]);
+
     mp_hal_pin_high(Pin_CS);
 }
 
@@ -306,7 +306,7 @@ STATIC void write_data( uint8_t *data, uint8_t len)
     mp_hal_pin_low(Pin_CS);
     //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
     spi_transfer(&spi_obj[0],len, data, NULL, TIMEOUT_SPI);
-    //printf("Se supone que mande una trama de datos\n");
+
     mp_hal_pin_high(Pin_CS);
 }
 /*
@@ -371,7 +371,6 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
         //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
         //siempre se mandan 2 bytes a esta funcion
         spi_transfer(&spi_obj[0],2,data_transfer, NULL, TIMEOUT_SPI);
-        //printf("Estoy mandando pixeles segun");
     }
     mp_hal_pin_high(Pin_CS);
 }
@@ -464,129 +463,124 @@ STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     //mp_obj_is_bool(orient);
     //primer hard reset 
-    printf("Antes de Reset\n");
+
     reset(); //function here
-    printf("Despues de Reset\n");
+
     write_cmd(CMD_SWRESET);
-    printf("Dato SWRESET send\n");
+
     mp_hal_delay_ms(150);
     write_cmd(CMD_SLPOUT);
-    printf("Dato SLPOUT send\n");
+
     mp_hal_delay_ms(255);
 
     //Optimizacion de la transmision de datos y delays
     write_cmd(CMD_FRMCTR1);
-    printf("Dato FRMCTR1 send\n");
+
     //convertirlo en array dinamico?
     uint8_t data_set3[]={0x01, 0x2C, 0x2D};
     write_data(data_set3, sizeof(data_set3));
-    printf("Dato data_set3 send\n");
+
     write_cmd(CMD_FRMCTR2);
-    printf("Dato FRMCTR2 send\n");
+
     uint8_t data_set6[]={0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
     write_data(data_set6, sizeof(data_set6));
-    printf("Dato data_set6 send\n");
+
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_INVCTR);
-    printf("Dato INVCTR send\n");
+
     uint8_t data_set1[]={0x07};
     write_data(data_set1, sizeof(data_set1));
-    printf("Dato data_set1 send\n");
+
     
     write_cmd(CMD_PWCTR1);
-    printf("Dato PWCTR1 send\n");
+
     uint8_t dataset[]={0xA2, 0x02, 0x84};
     write_data(dataset, sizeof(dataset));
-    printf("Dato dataset send\n");
+
     write_cmd(CMD_PWCTR2);
-    printf("Dato PWCTR2 send\n");
+
     uint8_t dataset1[]={0xC5};
     write_data(dataset1, sizeof(dataset1));
-    printf("Dato dataset1 send\n");
+
     write_cmd(CMD_PWCTR3);
-    printf("Dato PWCTR3 send\n");
+
     uint8_t dataset2[]={0x8A, 0x00};
     write_data(dataset2, sizeof(dataset2));
-    printf("Dato dataset2 send\n");
+
     write_cmd(CMD_PWCTR4);
-    printf("Dato PWCTR4 send\n");
+
     uint8_t dataset3[]={0x8A, 0x2A};
     write_data(dataset3, sizeof(dataset3));
-    printf("Dato dataset3 send\n");
+
     write_cmd(CMD_PWCTR5);
-    printf("Dato PWCTR5 send\n");
+
     uint8_t dataset4[]={0x8A, 0xEE};
     write_data(dataset4, sizeof(dataset4));
-    printf("Dato dataset4 send\n");
 
     write_cmd(CMD_VMCTR1);
-    printf("Dato VMCTR1 send\n");
+
     uint8_t data_vmc[]={0x0E};
     write_data(data_vmc, sizeof(data_vmc));
-    printf("Dato data_vmc send\n");
+
     write_cmd(CMD_INVOFF);
-    printf("Dato INVOFF send\n");
+
     write_cmd(CMD_MADCTL);
-    printf("Dato MADCTL send\n");
 
     if(args[1]==0)
     {
         uint8_t data_orient[]={0xA0};
         write_data(data_orient, sizeof(data_orient));
-        printf("Dato data_orient send\n");
+
         self->width=160;
         self->height=128;
-        printf("width: %d, height: %d \n",self->width, self->height);
     }
     else
     {
         uint8_t datas[]={0x00};
         write_data(datas, sizeof(datas));
-        printf("Dato datas send\n");
+
         self->width=128;
         self->height=160;
-        printf("width: %d, height: %d \n",self->width, self->height);
+
     }
     write_cmd(CMD_COLMOD);
-    printf("Dato COLMOD send\n");
+
     uint8_t dataset0[]={0x05};
     write_data(dataset0, sizeof(dataset0));
-    printf("Dato dataset0 send\n");
+
 
     write_cmd(CMD_CASET);
-    printf("Dato CASET send\n");
+
     uint8_t dataset5[]={0x00, 0x01, 0x00, 127};
     write_data(dataset5, sizeof(dataset5));
-    printf("Dato dataset5 send\n");
+
 
     write_cmd(CMD_RASET);
-    printf("Dato RASET send\n");
+
     uint8_t dataset6[]={0x00, 0x01, 0x00, 159};
     write_data(dataset6, sizeof(dataset6));
-    printf("Dato dataset6 send\n");
+
     
     write_cmd(CMD_GMCTRP1);
-    printf("Dato GMCTRP1 send\n");
+
     uint8_t dataset7[]={0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10};
     write_data(dataset7, sizeof(dataset7));
-    printf("Dato dataset7 send\n");
+
 
     write_cmd(CMD_GMCTRN1);
-    printf("Dato GMCTRN1 send\n");
+
     uint8_t dataset8[]={0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10};
     write_data(dataset8, sizeof(dataset8));
-    printf("Dato dataset8 send\n");
+
 
     write_cmd(CMD_NORON);
-    printf("Dato NORON send\n");
+
     mp_hal_delay_ms(10);
 
     write_cmd(CMD_DISPON);
-    printf("Dato DISPON send\n");
+
     mp_hal_delay_ms(100);
-    //DEBUG
-    //printf("width: %u, height: %u \n",self->width, self->height);
     
     return mp_const_none;
 }
@@ -629,14 +623,12 @@ STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
     if(state==mp_const_true || state==mp_obj_new_int(1))
     {
         write_cmd(CMD_INVON);
-        printf("Invertimos la pantalla\n");
         self->inverted=true;
     }
     else
     {
         write_cmd(CMD_INVOFF);
         self->inverted=false;
-        printf("Quitamos la inversion de la pantalla\n");
     }
     
     return mp_const_none;
@@ -676,7 +668,6 @@ STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
     uint8_t x_int8=(uint8_t)mp_obj_get_int(args[1]);
     uint8_t y_int8=(uint8_t)mp_obj_get_int(args[2]);
     uint16_t color_int16=mp_obj_get_int(args[3]);
-    printf("%u , %u, %u", x_int8, y_int8, color_int16);
     set_window(self, x_int8, y_int8, x_int8+1, y_int8+1);
     write_pixels(1,color_int16);
     return mp_const_none;
@@ -805,8 +796,6 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
 */
 STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16_t color, uint8_t sizex, uint8_t sizey)
 {
-    printf("       Estoy en charfunc!  ch: %c\n", ch);
-
     //Draw a character at a given position using the user font.
     //Font is a data dictionary, can be scaled with sizex and sizey.
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -815,18 +804,8 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
     uint8_t endchar=END;
     uint16_t ci=(uint16_t)ch;
 
-    printf("  Params:\n");
-    printf("  x: %d\n", x);
-    printf("  y: %d\n", y);
-    printf("  ch: %c\n", ch);
-    printf("  color: %d\n", color);
-    printf("  sizex: %d\n", sizex);
-    printf("  sizey: %d\n", sizey);
-    printf("  ci: %d\n", ci);           //Revisar bien conversion ASCII to UNICODE
-
     if(!sizex && !sizey)
     {
-        printf("  xd\n");
         //this is by defect in the function uPython
         sizex=1;
         sizey=1;
@@ -834,10 +813,7 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
 
     if(startchar<=ci && ci<=endchar)
     {
-        //uint8_t width=WIDTH;
-        //uint8_t height=HEIGHT;
         ci=(ci-startchar)*WIDTH;
-        printf("  ci modificada: %d\n", ci);
 
         // this the equivalent to ch = font['data'][ci:ci + width]
         uint8_t ch[6];
@@ -845,51 +821,41 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
         {
             ch[i]=Font[ci];
             ci++;
-            printf("  Puse: %x \n",ch[i]);
         }
         //end to equivalent
         
         //no font scaling
         uint8_t px=x;
-        printf("  px: %d\n", px);
 
         if(sizex<=1 && sizey<=1)
         {
-            printf("  Aca ando\n");
             for(uint8_t k=0; k<WIDTH;k++)
             {
                 uint8_t py=y;
-                //printf("k: %d  px: %d   py: %d\n", k, px, py);
 
                 char temp = ch[k];
                 for(uint8_t i=0; i<HEIGHT;i++)
                 {
                     if(temp&0x01)
                     {
-                        //printf("  Pongo pixel en px: %d py: %d\n", px, py);
                         pixel0(self, px, py, color);
                     }
                     py+=1;
                     temp>>=1;
                 }
                 px+=1;
-
-                //mp_hal_delay_us(100000);
             }
         }
         else //scale to given sizes
         {
-            printf("  Que show\n");
             for(uint8_t c=0;c<WIDTH;c++)
             {
                 uint8_t py=y;
-                printf("  py: %d\n", py);
 
                 for(uint8_t i=0; i<HEIGHT;i++)
                 {
                     if(ch[c]&0x01)
                     {
-                        printf("  Dibujo rect: \n");
                         rect_int(self, px, py, sizex, sizey, color);
                     }
                     
@@ -909,32 +875,25 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
 */
 STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
 {
-    printf("Entre a text\n");
     //Draw text at a given position using the user font.
     //Font can be scaled with the size parameter.
     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     uint8_t x = mp_obj_get_int(args[1]);
-    printf("x: %d\n", x);
     uint8_t y = mp_obj_get_int(args[2]);
-    printf("y: %d\n", y);
 
     mp_check_self(mp_obj_is_str_or_bytes(args[3]));
     GET_STR_DATA_LEN(args[3], str, str_len);
     char string[str_len];
     strcpy(string, (char *)str);
-    printf("Mi string es: %s\n", string);
 
     uint16_t color = mp_obj_get_int(args[4]);
-    printf("Color: %d\n", color);
 
     uint8_t width=WIDTH+1;
-    
 
     uint8_t px=x;
-    printf("Voy a entrar al for\n");
+
     for(uint8_t i=0;i<str_len;i++)
     {
-        printf("i es: %d\n", i);
         charfunc(self, px, y, string[i], color, 1, 1);
         px+=width;
         // wrap the text to the next line if it reaches the end
