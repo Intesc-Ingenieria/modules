@@ -30,7 +30,7 @@
 #include "py/objstr.h"
 #include "py/mphal.h"          
 #include "ports/stm32/spi.h"
-//#include "lib/oofatfs/ff.h"
+#include "lib/oofatfs/ff.h"
 /*
     Definicion de los Comandos
 */
@@ -220,16 +220,16 @@ const uint8_t Font[]=
     *Don't necessary change the type of var a alternative name is better using name?
 */
 // if use typedef uint8_t U8; may have a problem with the code optimization.
-// typedef struct imgBMPdescription
-// {
-//     uint8_t u8XSize;  // Size in pixels to X axe 
-//     uint8_t u8YSize;  // Size in pixels to Y axe 
-//     uint8_t u8XCursor;// Coordinate in X axe
-//     uint8_t u8YCursor;// Coordinate in Y axe
-//     uint8_t* pu8Img;   // Pointer to Img Data
-// }BMPData;
+typedef struct imgBMPdescription
+{
+    uint8_t u8XSize;  // Size in pixels to X axe 
+    uint8_t u8YSize;  // Size in pixels to Y axe 
+    uint8_t u8XCursor;// Coordinate in X axe
+    uint8_t u8YCursor;// Coordinate in Y axe
+    uint8_t* pu8Img;   // Pointer to Img Data
+}BMPData;
 
-// BMPData pstImgdesc;
+BMPData pstImgdesc;
 /*
     Definicion de la estructura de datos dispuesta para la pantalla TFT
 */
@@ -319,7 +319,7 @@ STATIC void write_cmd(int cmd)
     Ejemplo de transmision de datos en Python:
                 self.write_data(bytearray([0x00, y0 + self.margin_row, 0x00, y1 + self.margin_row]))
 */
-STATIC void write_data( uint8_t *data, uint8_t len)
+STATIC void write_data( uint8_t *data, size_t len)
 {
     mp_hal_pin_high(Pin_DC);
     mp_hal_pin_low(Pin_CS);
@@ -471,12 +471,12 @@ STATIC mp_obj_t rect_int(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint
 /*
     drawImg() | Intern Function for put a Img in screen.
 */
-// STATIC void drawImg(mp_obj_t self_in, BMPData* pstImgDesc)
-// {
-//     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-//     set_window(self, pstImgDesc->u8XCursor, pstImgDesc->u8YCursor, pstImgDesc->u8XSize, pstImgDesc->u8YSize);
-//     write_data(pstImgDesc->pu8Img, pstImgDesc->u8XSize * pstImgDesc->u8YSize * 3);
-// }
+STATIC void drawImg(mp_obj_t self_in, BMPData* pstImgDesc)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    set_window(self, pstImgDesc->u8XCursor, pstImgDesc->u8YCursor, pstImgDesc->u8XSize, pstImgDesc->u8YSize);
+    write_data(pstImgDesc->pu8Img, pstImgDesc->u8XSize * pstImgDesc->u8YSize * 3);
+}
 
 /*
     ST7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
@@ -964,128 +964,132 @@ STATIC mp_obj_t clear(mp_obj_t self_in, mp_obj_t color)
 /*
   show_image()  | Function in progress
 */
-// STATIC mp_obj_t show_image(size_t n_args, const mp_obj_t *args)
-// {
-//     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-//     uint8_t x=mp_obj_get_int(args[1]);
-//     uint8_t y=mp_obj_get_int(args[2]);
-//     mp_check_self(mp_obj_is_str_or_bytes(args[3]));
-//     GET_STR_DATA_LEN(args[3], str, str_len);
-//     char file[str_len];
-//     strcpy(file, (char *)str);
+STATIC mp_obj_t show_image(size_t n_args, const mp_obj_t *args)
+{
+    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint8_t x=mp_obj_get_int(args[1]);
+    uint8_t y=mp_obj_get_int(args[2]);
+    mp_check_self(mp_obj_is_str_or_bytes(args[3]));
+    GET_STR_DATA_LEN(args[3], str, str_len);
+    char file[str_len];
+    strcpy(file, (char *)str);
     
+    printf("Hago uso de valores para leer el epacio de la micro SD \n");
+    FATFS fatfs;    ///Archivo del sistema para el driver (SD)
+    FIL fil;        //Estructura del objeto de archivo
+    FRESULT fresult;///Retorno de ejecucion de funciones (Enum definidos)
+    UINT testBytes; //Variable entera de 32 bits sin signo
 
-//     FATFS fatfs;    ///Archivo del sistema para el driver (SD)
-//     FIL fil;        //Estructura del objeto de archivo
-//     FRESULT fresult;///Retorno de ejecucion de funciones (Enum definidos)
-//     UINT testBytes; //Variable entera de 32 bits sin signo
+    uint8_t BMInfo_Buffer[54];
+    uint16_t PointerImage=0;
+    uint16_t HeightImg, WideImg;
 
-//     uint8_t BMInfo_Buffer[54];
-//     uint16_t PointerImage=0;
-//     uint16_t HeightImg, WideImg;
+    //init the use of FS
+    //This function registers/unregisters a filesystem object
+    printf("Monto la SD\n");
+	if(fresult == FR_OK){
+		//This function opens a file and sets the write/read pointer to zero
+        printf("Todo OK, Voy a abrir el archivo %s \n",file);
+		fresult = f_open(&fatfs ,&fil , file, FA_READ | FA_WRITE);
+		if(fresult == FR_OK){ 			//checking if a file is open correctly
+			fresult = f_lseek(&fil, 0); //Pointing to begin of file BMP.
+            printf("Voy a posicionarme la posicion 0 del archivo\n");
+			// Getting all the parameters of the file BMP.
+			// Reads a firts 54 bytes of file and saves in BMInfo_Buffer.
+			fresult = f_read(&fil, BMInfo_Buffer, sizeof(BMInfo_Buffer), &testBytes);
+            printf("Voy a leer el archivo\n");
+			//In this conditional it's verified the "BM" nature of the file
+			if (BMInfo_Buffer[0] == 'B' && BMInfo_Buffer[1] == 'M'){
+				//extracting size of image.
+				HeightImg = (BMInfo_Buffer[19] << 8 | BMInfo_Buffer[18]);
+				WideImg = (BMInfo_Buffer[23] << 8 | BMInfo_Buffer[22]);
+				if(HeightImg<=160 && WideImg<=128){//checking size of image.
+					if(BMInfo_Buffer[28]==8){ //checking the format codifying of the pixels
+						/*Here two variables are created:
+						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.
+						 *Image_Line_RGB: will store the 480 numbers, those are bytes information RGB to print in screen.*/
+						uint8_t Line_Buffer[BMInfo_Buffer[18]];
+						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
+						uint8_t ColorMap_Buffer[1024];
+						// Get the color map
+						fresult = f_lseek(&fil, 54);
+						fresult = f_read(&fil, ColorMap_Buffer, sizeof(ColorMap_Buffer), &testBytes);
+						// This for cycle will run many times as the height of the image
+						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
+						{
+							//This pointer it's use to get the information inside the Line buffer
+							PointerImage = 0;
+							//Get the line N
+							fresult = f_lseek(&fil, 1078+(BMInfo_Buffer[18]*j));
+							fresult = f_read(&fil, Line_Buffer, sizeof(Line_Buffer), &testBytes);
+							//In this for cycle it's created the line tha will be printed in Ophyra's TFT---
+							for(uint16_t i = 0; i < sizeof(Image_Line_RGB); i=i+3)
+							{
+								Image_Line_RGB[i+2] = ColorMap_Buffer[(Line_Buffer[PointerImage])*4];
 
-//     //init the use of FS
-//     //This function registers/unregisters a filesystem object
-// 	fresult = f_mount(&fatfs);
-// 	if(fresult == FR_OK){
-// 		//This function opens a file and sets the write/read pointer to zero
-// 		fresult = f_open(&fatfs ,&fil , file, FA_READ | FA_WRITE);
-// 		if(fresult == FR_OK){ 			//checking if a file is open correctly
-// 			fresult = f_lseek(&fil, 0); //Pointing to begin of file BMP.
-// 			// Getting all the parameters of the file BMP.
-// 			// Reads a firts 54 bytes of file and saves in BMInfo_Buffer.
-// 			fresult = f_read(&fil, BMInfo_Buffer, sizeof(BMInfo_Buffer), &testBytes);
-// 			//In this conditional it's verified the "BM" nature of the file
-// 			if (BMInfo_Buffer[0] == 'B' && BMInfo_Buffer[1] == 'M'){
-// 				//extracting size of image.
-// 				HeightImg = (BMInfo_Buffer[19] << 8 | BMInfo_Buffer[18]);
-// 				WideImg = (BMInfo_Buffer[23] << 8 | BMInfo_Buffer[22]);
-// 				if(HeightImg<=160 && WideImg<=128){//checking size of image.
-// 					if(BMInfo_Buffer[28]==8){ //checking the format codifying of the pixels
-// 						/*Here two variables are created:
-// 						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.
-// 						 *Image_Line_RGB: will store the 480 numbers, those are bytes information RGB to print in screen.*/
-// 						uint8_t Line_Buffer[BMInfo_Buffer[18]];
-// 						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
-// 						uint8_t ColorMap_Buffer[1024];
-// 						// Get the color map
-// 						fresult = f_lseek(&fil, 54);
-// 						fresult = f_read(&fil, ColorMap_Buffer, sizeof(ColorMap_Buffer), &testBytes);
-// 						// This for cycle will run many times as the height of the image
-// 						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
-// 						{
-// 							//This pointer it's use to get the information inside the Line buffer
-// 							PointerImage = 0;
-// 							//Get the line N
-// 							fresult = f_lseek(&fil, 1078+(BMInfo_Buffer[18]*j));
-// 							fresult = f_read(&fil, Line_Buffer, sizeof(Line_Buffer), &testBytes);
-// 							//In this for cycle it's created the line tha will be printed in Ophyra's TFT---
-// 							for(uint16_t i = 0; i < sizeof(Image_Line_RGB); i=i+3)
-// 							{
-// 								Image_Line_RGB[i+2] = ColorMap_Buffer[(Line_Buffer[PointerImage])*4];
+								Image_Line_RGB[i+1] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+1];
 
-// 								Image_Line_RGB[i+1] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+1];
+								Image_Line_RGB[i] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+2];
 
-// 								Image_Line_RGB[i] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+2];
+								PointerImage++;
+							}
+							//-------------------------Prints the line N on Ophyra's TF-------------------
+							pstImgdesc.pu8Img = Image_Line_RGB;
+							pstImgdesc.u8XSize = BMInfo_Buffer[18];
+							pstImgdesc.u8YSize = 1;
+							pstImgdesc.u8XCursor = x;
+							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
+							drawImg(self ,&pstImgdesc);
+							//----------------------------------------------------------------------------
+						}
 
-// 								PointerImage++;
-// 							}
-// 							//-------------------------Prints the line N on Ophyra's TF-------------------
-// 							pstImgdesc.pu8Img = Image_Line_RGB;
-// 							pstImgdesc.u8XSize = BMInfo_Buffer[18];
-// 							pstImgdesc.u8YSize = 1;
-// 							pstImgdesc.u8XCursor = x;
-// 							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
-// 							drawImg(self ,&pstImgdesc);
-// 							//----------------------------------------------------------------------------
-// 						}
+					}else if(BMInfo_Buffer[28]==24){
+						/*Here two variables are created:
+						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.*/
+						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
+						// This for cycle will run many times as the height of the image
+						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
+						{//Get the line N
+							fresult = f_lseek(&fil, 54+(3*BMInfo_Buffer[18]*j));
+							fresult = f_read(&fil, Image_Line_RGB, sizeof(Image_Line_RGB), &testBytes);
+							//-------------------------Prints the line N on Ophyra's TF-------------------
+							for(uint16_t i=0; i < sizeof(Image_Line_RGB); i=i+3)
+							{
+								uint8_t tempo = Image_Line_RGB[i];
+								Image_Line_RGB[i] = Image_Line_RGB[i+2];
+								Image_Line_RGB[i+2] = tempo;
+							}
+							pstImgdesc.pu8Img = Image_Line_RGB;
+							pstImgdesc.u8XSize = BMInfo_Buffer[18];
+							pstImgdesc.u8YSize = 1;
+							pstImgdesc.u8XCursor = x;
+							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
+							drawImg(self, &pstImgdesc);
+							//----------------------------------------------------------------------------
+						}
+					}else{
+						printf("Error only 8 or 24 bit supported");
+					}
+				}else{
+					printf("Error image too large");
+				}
+			}else{
+				printf("Error Image is not a BMP");
+			}
+		}else{
+			printf("Error Image not found!");
+		}
+	}
+	else{
+		printf("Error SD no mount");
+	}
+	if(fresult == FR_OK){
+		fresult = f_close(&fil);//This function close an open file
+        printf("Cerre el archivo\n");
+	}    
+    return mp_const_none;
 
-// 					}else if(BMInfo_Buffer[28]==24){
-// 						/*Here two variables are created:
-// 						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.*/
-// 						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
-// 						// This for cycle will run many times as the height of the image
-// 						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
-// 						{//Get the line N
-// 							fresult = f_lseek(&fil, 54+(3*BMInfo_Buffer[18]*j));
-// 							fresult = f_read(&fil, Image_Line_RGB, sizeof(Image_Line_RGB), &testBytes);
-// 							//-------------------------Prints the line N on Ophyra's TF-------------------
-// 							for(uint16_t i=0; i < sizeof(Image_Line_RGB); i=i+3)
-// 							{
-// 								uint8_t tempo = Image_Line_RGB[i];
-// 								Image_Line_RGB[i] = Image_Line_RGB[i+2];
-// 								Image_Line_RGB[i+2] = tempo;
-// 							}
-// 							pstImgdesc.pu8Img = Image_Line_RGB;
-// 							pstImgdesc.u8XSize = BMInfo_Buffer[18];
-// 							pstImgdesc.u8YSize = 1;
-// 							pstImgdesc.u8XCursor = x;
-// 							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
-// 							drawImg(self, &pstImgdesc);
-// 							//----------------------------------------------------------------------------
-// 						}
-// 					}else{
-// 						printf("Error only 8 or 24 bit supported");
-// 					}
-// 				}else{
-// 					printf("Error image too large");
-// 				}
-// 			}else{
-// 				printf("Error Image is not a BMP");
-// 			}
-// 		}else{
-// 			printf("Error Image not found!");
-// 		}
-// 	}
-// 	else{
-// 		printf("Error SD no mount");
-// 	}
-// 	if(fresult == FR_OK){
-// 		fresult = f_close(&fil);//This function close an open file
-// 	}    
-//     return mp_const_none;
-
-// }
+}
 //Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(st7735_init_obj, 1, 2, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
@@ -1097,7 +1101,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(text_obj, 5, 7, text);
 MP_DEFINE_CONST_FUN_OBJ_2(clear_obj, clear);
-// MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
+MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
 /*
     Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
     programacion en Micropython. Ej: Si se escribe:
@@ -1116,7 +1120,7 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&text_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&clear_obj) },
-    // { MP_ROM_QSTR(MP_QSTR_show_image), MP_ROM_PTR(&show_image_obj) },
+    { MP_ROM_QSTR(MP_QSTR_show_image), MP_ROM_PTR(&show_image_obj) },
     //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
 };
                                 
