@@ -1,20 +1,20 @@
 /*
     ophyra_tftdisp.c
 
-    Modulo de usuario en C para la utilizacion de la pantalla TFT ST7735 la tarjeta Ophyra, fabricada por
+    User module in C for the use of the TFT ST7735 display and the Ophyra board, manufactured by Intesc Electronica y Embebidos.
     Intesc Electronica y Embebidos.
 
-    Este archivo incluye la definicion de una clase y 19 funciones que necesita la pantalla TFT para funcionar 
-    correctamente en el lenguaje MicroPython.
+    This file includes the definition of a class and 19 functions that the TFT screen needs to work correctly in the MicroPython language. 
+    correctly in the MicroPython language.
 
-    Para construir el firmware incluyendo este modulo, ejecutar en Cygwin:
-        make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_TFTDISP_ENABLED=1 all
+    To build the firmware including this module, run in Cygwin:
+        make BOARD=OPHYRA USER_C_MODULES=../.../.../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_TFTDISP_ENABLED=1 all
 
-        En USER_C_MODULES se especifica el path hacia la localizacion de la carpeta modules, donde se encuentra
-        el archivo ophyra_tftdisp.c y micropython.mk
+        In USER_C_MODULES you specify the path to the location of the modules folder, where the ophyra_tft file is located.
+        the ophyra_tftdisp.c and micropython.mk files are located.
 
-    Escrito por: Jonatan Salinas y Carlos D. Hernández.
-    Ultima fecha de modificacion: 29/04/2021.
+    Written by: Jonatan Salinas and Carlos D. Hernández.
+    Last modification date: 05/10/2021.
 
     CHANGELOG
 
@@ -30,9 +30,9 @@
 #include "py/objstr.h"
 #include "py/mphal.h"          
 #include "ports/stm32/spi.h"
-#include "lib/oofatfs/ff.h"
+//#include "lib/oofatfs/ff.h"
 /*
-    Definicion de los Comandos
+    Command Definitions
 */
 
 #define CMD_NOP     (0x00)  // No Operacion
@@ -64,7 +64,7 @@
 #define CMD_RDID4   (0xDD)  // Read ID4
 
 /*
-    Comandos de Función de Panel
+    Panel Function Commands
 */
 
 #define CMD_FRMCTR1 (0xB1)  // In normal mode (Full colors)
@@ -83,7 +83,7 @@
 #define CMD_GMCTRN1 (0xE1)
 
 /*
-    Identificadores de los pines de trabajo
+    Work pin identifiers
 */
 
 const pin_obj_t *Pin_DC=pin_D6;
@@ -92,7 +92,7 @@ const pin_obj_t *Pin_RST=pin_D7;
 const pin_obj_t *Pin_BL=pin_A7;
 
 /*
-    Definicion de la paleta de colores TFT
+    TFT color palette definition
 */
 
 #define COLOR_BLACK     (0x0000)
@@ -220,18 +220,18 @@ const uint8_t Font[]=
     *Don't necessary change the type of var a alternative name is better using name?
 */
 // if use typedef uint8_t U8; may have a problem with the code optimization.
-typedef struct imgBMPdescription
-{
-    uint8_t u8XSize;  // Size in pixels to X axe 
-    uint8_t u8YSize;  // Size in pixels to Y axe 
-    uint8_t u8XCursor;// Coordinate in X axe
-    uint8_t u8YCursor;// Coordinate in Y axe
-    uint8_t* pu8Img;   // Pointer to Img Data
-}BMPData;
+// typedef struct imgBMPdescription
+// {
+//     uint8_t u8XSize;  // Size in pixels to X axe 
+//     uint8_t u8YSize;  // Size in pixels to Y axe 
+//     uint8_t u8XCursor;// Coordinate in X axe
+//     uint8_t u8YCursor;// Coordinate in Y axe
+//     uint8_t* pu8Img;   // Pointer to Img Data
+// }BMPData;
 
-BMPData pstImgdesc;
+// BMPData pstImgdesc;
 /*
-    Definicion de la estructura de datos dispuesta para la pantalla TFT
+    Definition of the data structure arranged for TFT display
 */
 typedef struct _tftdisp_class_obj_t{
     mp_obj_base_t base;
@@ -247,35 +247,35 @@ typedef struct _tftdisp_class_obj_t{
 
 const mp_obj_type_t tftdisp_class_type;
 
-//Funcion print
+// Print Function
 STATIC void tftdisp_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
     mp_print_str(print, "tftdisp_class()");
 }
 
 /*
-    make_new: Constructor de la clase. Esta funcion se invoca cuando el usuario de Micropython escribe:
+    make_new: Class constructor. This function is invoked when the Micropython user types:
         ST7735()
 */
 STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     tftdisp_class_obj_t *self = m_new_obj(tftdisp_class_obj_t);
     self->base.type = &tftdisp_class_type;
 
-    //definicion de los pines de trabajo para la TFT  
+    //Definition of the use of the working pins for the TFT  
     mp_hal_pin_config(Pin_DC, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_DOWN,0);
     mp_hal_pin_config(Pin_CS, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_DOWN,0);
     mp_hal_pin_config(Pin_RST, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_DOWN,0);
     mp_hal_pin_config(Pin_BL, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_DOWN,0);
     
-    //definición de los estados logicos 
+    // Definition of logical states 
     self->power_on=true;
     self->inverted=false;
     self->backlight_on=true;
-    //inicialiacion de las columnas y filas del display TFT
+    //Initialization of the TFT display columns and rows
     self->margin_row=0;
     self->margin_col=0;
     self->spi=&spi_obj[0];
-    // Configuraciones de la comunicacion SPI
+    // SPI communication settings
     //spi_set_params(&spi_obj[0], PRESCALE, BAUDRATE, POLARITY, PHASE, BITS, FIRSTBIT);
     SPI_InitTypeDef *init = &self->spi->spi->Init;
     init->Mode = SPI_MODE_MASTER;
@@ -294,19 +294,19 @@ STATIC mp_obj_t tftdisp_class_make_new(const mp_obj_type_t *type, size_t n_args,
     return MP_OBJ_FROM_PTR(self);
 }
 
-//  Funciones Aqui
+//  Here Intern Functions
 
 /*
-    write_cmd() Intern function | Nos sirve para comunicarnos con la pantalla TFT a traves de comandos preestablecidos, los
-    cuales sirven para configurar la tft previo a su funcionamiento.
-    Ejemplo de transmision de datos en Python:
+    write_cmd() Internal function | It is used to communicate with the TFT screen through preset commands, which are used to configure the TFT prior to its operation.
+    which are used to configure the TFT prior to its operation.
+    Example of data transmission in Python:
                 self.write_cmd(CMD_RASET)
 */
 STATIC void write_cmd(int cmd)
 {
     mp_hal_pin_low(Pin_DC);
     mp_hal_pin_low(Pin_CS);
-    //definimos un espacio de tamaño de 1 byte
+    //We define a space of size 1 byte
     uint8_t aux[1]={(uint8_t)cmd};
     spi_transfer(&spi_obj[0],1, aux, NULL, TIMEOUT_SPI);
 
@@ -314,27 +314,27 @@ STATIC void write_cmd(int cmd)
 }
 
 /*
-    write_data() Intern function | Nos permite mandar arreglos de memoria definidos del tipo bytearray solo de manera interna para el control
-    de datos que conforman ciertas funciones como show_image().
-    Ejemplo de transmision de datos en Python:
+    write_data() Internal function | Allows us to send defined memory arrays of type bytearray only internally for the control of data that make up certain functions such as show_image().
+    data that make up certain functions such as show_image().
+    Example of data transmission in Python:
                 self.write_data(bytearray([0x00, y0 + self.margin_row, 0x00, y1 + self.margin_row]))
 */
 STATIC void write_data( uint8_t *data, size_t len)
 {
     mp_hal_pin_high(Pin_DC);
     mp_hal_pin_low(Pin_CS);
-    //Medimos el tamaño del array con sizeof() para saber el tamaño en bytes
+    //We measure the size of the array with sizeof() to know the size in bytes.
     spi_transfer(&spi_obj[0],len, data, NULL, TIMEOUT_SPI);
 
     mp_hal_pin_high(Pin_CS);
 }
 /*
-    set_window() intern function | Define configuraciones para las filas y columnas en el display de la pantalla de tal manera que
-    cuando se ubique un pixel o caracter? este se preconfigure.
+    set_window() intern function | Defines settings for the rows and columns in the screen display so that when a pixel or character is placed it is preset.
+    when a pixel or character? is placed it is preset.
     
     Disclaimer.
-        Se necesita hacer una conversion a los objetos con los que trabajes en las otras funciones que se definan
-        dentro de uPython.
+        You need to make a conversion to the objects you work with in the other functions you define within uPython.
+        inside uPython.
 */
 STATIC void set_window(mp_obj_t self_in, uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
@@ -371,10 +371,10 @@ STATIC void reset(void)
 }
 
 /*
-    write_pixels() intern function | Sirve para dibujar un pixel en el display
-    de tal forma que todas las funciones necesitan a esta funcion para dibujar
-    en pantalla los pixeles deseados rebiendo en si el tamaño de pixeles a dibujar
-    y el color.
+    write_pixels() intern function | Used to draw a pixel on the display
+    so that all the functions need this function to draw the desired pixels on the screen
+    the desired pixels on the screen by returning the size of pixels to be drawn and the color.
+    and the color.
 */
 
 STATIC void write_pixels(uint16_t count, uint16_t color)
@@ -387,16 +387,16 @@ STATIC void write_pixels(uint16_t count, uint16_t color)
     mp_hal_pin_low(Pin_CS);
     for(uint16_t i=0; i<count;i++)
     {   
-        //Mandamos el color del tamaño de 2 bytes si el color es de 16 bits
-        //siempre se mandan 2 bytes a esta funcion
+        //We send the color of the size of 2 bytes if the color is 16 bits.
+        //Always 2 bytes are sent to this function
         spi_transfer(&spi_obj[0],2,data_transfer, NULL, TIMEOUT_SPI);
     }
     mp_hal_pin_high(Pin_CS);
 }
 /*
-    hline() | Intern Function. Esta funcion es de uso interno para la creacion de
-    lineas horizontales en el display TFT.
-    Acepta parametros primitivos al ser de uso interno.
+    hline() | Intern Function. This function is used internally to create horizontal lines on the TFT display.
+    horizontal lines on the TFT display.
+    It accepts primitive parameters as it is for internal use.
 */
 STATIC mp_obj_t hline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint16_t color)
 {
@@ -411,9 +411,9 @@ STATIC mp_obj_t hline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint16_
 }
 
 /*
-    vline() | Intern function. Esta funcion es de uso interno para la
-    creacion de lineas verticales en el display TFT, de este manera se
-    envian parametros primitivos al ser de uso interno
+    vline() | Intern function. This function is for internal use for the
+    creation of vertical lines in the TFT display, in this way primitive parameters are
+    primitive parameters are sent as it is for internal use.
 */
 STATIC mp_obj_t vline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t h, uint16_t color)
 {
@@ -432,9 +432,9 @@ STATIC mp_obj_t vline(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t h, uint16_
 }
 
 /*
-    pixel0(x, y, color) | Intern Function nos sirve para dibujar un solo pixel individual en la pantalla TFT
-    de tal forma que funciones de uso publico en python puedan mandar datos primitivos, 
-    para acelerar el proceso de trazado en el display tft.
+    pixel0(x, y, color) | Intern Function is used to draw a single individual pixel on the TFT screen
+    so that public use python functions can send primitive data, 
+    to speed up the plotting process on the TFT display.
     
 */
 STATIC void pixel0(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
@@ -445,7 +445,7 @@ STATIC void pixel0(mp_obj_t self_in, uint8_t x, uint8_t y, uint16_t color )
     write_pixels(1,color);
 }
 /*
-    rect_int | Intern Function is the same with functio rect only receive primitive
+    rect_int | Intern Function is the same with function rect() only receive primitive
     params.
 */
 STATIC mp_obj_t rect_int(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint16_t color)
@@ -471,18 +471,18 @@ STATIC mp_obj_t rect_int(mp_obj_t self_in, uint8_t x, uint8_t y, uint8_t w, uint
 /*
     drawImg() | Intern Function for put a Img in screen.
 */
-STATIC void drawImg(mp_obj_t self_in, BMPData* pstImgDesc)
-{
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    set_window(self, pstImgDesc->u8XCursor, pstImgDesc->u8YCursor, pstImgDesc->u8XSize, pstImgDesc->u8YSize);
-    write_data(pstImgDesc->pu8Img, pstImgDesc->u8XSize * pstImgDesc->u8YSize * 3);
-}
+// STATIC void drawImg(mp_obj_t self_in, BMPData* pstImgDesc)
+// {
+//     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(self_in);
+//     set_window(self, pstImgDesc->u8XCursor, pstImgDesc->u8YCursor, pstImgDesc->u8XSize, pstImgDesc->u8YSize);
+//     write_data(pstImgDesc->pu8Img, pstImgDesc->u8XSize * pstImgDesc->u8YSize * 3);
+// }
 
 /*
-    ST7735() es la funcion que inicializa la pantalla TFT es el equivalente a:
+    ST7735() is the function that initializes the TFT screen is the equivalent of:
         ST7735().init()
-    En este caso habra un cambio el cual la funcion se invocara de la siguiente manera:
-        ST7735().init(True)
+    In this case there will be a change in which the function will be invoked as follows:
+        ST7735().init(True) or ST7735().init(1)
 
 */
 STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
@@ -494,10 +494,8 @@ STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
         orient=mp_obj_get_int(args[1]);
     }
     //mp_obj_is_bool(orient);
-    //primer hard reset 
-    printf("valor del argumento: %d\n", orient);
+    //First hard reset 
     reset(); //function here
-    printf("despues del reset\n");
     write_cmd(CMD_SWRESET);
 
     mp_hal_delay_ms(150);
@@ -505,10 +503,10 @@ STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
 
     mp_hal_delay_ms(255);
 
-    //Optimizacion de la transmision de datos y delays
+    //Data transmission and delays optimization
     write_cmd(CMD_FRMCTR1);
 
-    //convertirlo en array dinamico?
+    
     uint8_t data_set3[]={0x01, 0x2C, 0x2D};
     write_data(data_set3, sizeof(data_set3));
 
@@ -618,7 +616,7 @@ STATIC mp_obj_t st7735_init(size_t n_args, const mp_obj_t *args)
 }
 
 /*
-    power() esta funcion sirve para encender la pantalla u obtener el estado de la pantalla?
+    power() this function is used to turn on the screen or to obtain the screen status.
 */
 STATIC mp_obj_t power(mp_obj_t self_in, mp_obj_t state)
 {
@@ -642,7 +640,7 @@ STATIC mp_obj_t power(mp_obj_t self_in, mp_obj_t state)
 }
 
 /*
-    inverted() sirve para obtener una inversion de colores en la TFT a traves de comandos
+    inverted() is used to obtain a color inversion on the TFT by means of commands
 */
 STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
 {
@@ -667,7 +665,7 @@ STATIC mp_obj_t inverted(mp_obj_t self_in, mp_obj_t state)
 }
 
 /*
-    backlight() Esta funcion permite encender la luz de la pantalla TFT.
+    backlight() This function allows you to turn on the light of the TFT screen.
 */
 STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
 {
@@ -689,8 +687,8 @@ STATIC mp_obj_t backlight(mp_obj_t self_in, mp_obj_t state)
     return mp_const_none;
 }
 /*
-    pixel(x, y, color) nos sirve para dibujar un solo pixel individual en la pantalla TFT
-    Ejemplo en uPython:
+    pixel(x, y, color) is used to draw a single individual pixel on the TFT screen.
+    Example in uPython:
         tft.pixel(10,20,tft.rgbcolor(255,25,0))
 */
 STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
@@ -704,8 +702,8 @@ STATIC mp_obj_t pixel(size_t n_args, const mp_obj_t *args)
     return mp_const_none;
 }
 /*
-    rgbcolor() funcion para establecer colores en la pantalla tft dado los
-    parametros Red, Green, Blue.
+    rgbcolor() function to set colors on the tft screen given the parameters Red, Green, Blue.
+    parameters Red, Green, Blue.
 */
 STATIC mp_obj_t rgbcolor(size_t n_args, const mp_obj_t *args)
 {
@@ -718,11 +716,11 @@ STATIC mp_obj_t rgbcolor(size_t n_args, const mp_obj_t *args)
 }
 
 /*
-    rect() Esta funcion nos sirve para la creacion de un
-    cuadrilatero en el que a traves de las coordenadas x, y
-    , la altura h, la anchura w y el color se implementa en 
-    esta función.
-    Ejemplo de uso en uPython:
+    rect() This function is used for the creation of a
+    quadrilatero in which through the coordinates x, y
+    coordinates, the height h, the width w and the color is implemented in this function. 
+    this function.
+    Example of use in uPython:
         tft.rect(10,20,50,60,tft.rgbcolor(23,0,254))
 */
 
@@ -740,8 +738,7 @@ STATIC mp_obj_t rect(size_t n_args, const mp_obj_t *args)
 }
 
 /*
-    line() Esta funcion crea el trazado de lineas en el display
-    a través del algoritmo de Bresenham's
+    line() This function creates the line drawing on the display through Bresenham's algorithm
 */
 STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
 {
@@ -784,7 +781,7 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
     }
     else
     {   
-        //Comienzo del algoritmo de Bresenham's
+        //Start Bresenham's algorithm
         int dx = abs(x1-x0), inx = x0<x1 ? 1 : -1;
         int dy = abs(y1-y0), iny = y0<y1 ? 1 : -1; 
         int err = (dx>dy ? dx : -dy)/2, e2;
@@ -809,12 +806,12 @@ STATIC mp_obj_t line(size_t n_args, const mp_obj_t *args)
 }
 
 /*
-    char() | Intern Function esta funcion pone un solo caracter en la pantalla
-    tft, esta funcion es dependencia de la funcion text()
+    char() | Intern Function. This function puts a single character on the screen.
+    tft, this function is a dependency of the text() function.
     
     CHANGELOG
-        Agregar una bandera y agregar un color extra para el fondo del texto en caso de requerirlo.
-        bool flag y uint16_t color_bcknd
+        Add a flag and add an extra color for the text background if required.
+        bool flag and uint16_t color_bcknd
 */
 STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16_t color, uint8_t sizex, uint8_t sizey, bool flag, uint16_t color_bcknd)
 {
@@ -862,7 +859,6 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
                     }
                     else if(flag)
                     {
-                        printf("Entro a color\n");
                         pixel0(self, px, py, color_bcknd);
                     }
                     py+=1;
@@ -896,15 +892,15 @@ STATIC mp_obj_t charfunc(mp_obj_t self_in, uint8_t x, uint8_t y, char ch, uint16
 } 
 
 /*
-    text() | Esta funcion despliega texto en el display TFT con los siguientes parametros:
+    text() | This function displays text on the TFT display with the following parameters:
         
-        -> x Possición  en el eje X.
-        -> y Possición  en el eje Y.
-        -> string variable receptora del texto a imprimir.
-        -> color Numero que define el color del texto.
-        Opcionales (Update)
-        -> flag token que recibe un valor booleano para activar el background
-        -> color_bcknd color de fondo que se desea.
+        -> x Position on the X-axis.
+        -> y Position on the Y-axis.
+        -> string Receiver variable of the text to print.
+        -> color Number that defines the color of the text.
+        Optional (Update)
+        -> flag token that receives a boolean value to activate the background.
+        -> color_bcknd desired background color.
 */
 STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
 {
@@ -922,14 +918,12 @@ STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
     uint16_t color = mp_obj_get_int(args[4]);
     bool flag=false;
     uint16_t color_bcknd=65535;
-    printf("The value of flag: %s\n",flag?"true":"false");
-    printf("the color default: %d\n",color_bcknd);
+    
+    
     if(n_args>5)
     {
         flag=mp_obj_get_int(args[5])? true : false;
         color_bcknd=mp_obj_get_int(args[6]);
-        printf("The value of flag into: %s\n",flag?"true":"false");
-        printf("the color defined by user: %d\n",color_bcknd);
     }
     uint8_t width=WIDTH+1;
     uint8_t px=x;
@@ -949,9 +943,8 @@ STATIC mp_obj_t text(size_t n_args, const mp_obj_t *args)
 
 }
 /*
-    clear() | Esta función limpia la pantalla a través del uso de la funcion rect_int() en la cual se
-    encarga de llenar la pantalla de un color establecido por el usuario dando a si el efecto de la 
-    pantalla vacia.
+    clear() | This function clears the screen through the use of the rect_int() function in which it fills the screen with a color set by the user.
+    fills the screen with a color set by the user giving the effect of an empty screen. 
 */
 STATIC mp_obj_t clear(mp_obj_t self_in, mp_obj_t color)
 {
@@ -964,133 +957,134 @@ STATIC mp_obj_t clear(mp_obj_t self_in, mp_obj_t color)
 /*
   show_image()  | Function in progress
 */
-STATIC mp_obj_t show_image(size_t n_args, const mp_obj_t *args)
-{
-    tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    uint8_t x=mp_obj_get_int(args[1]);
-    uint8_t y=mp_obj_get_int(args[2]);
-    mp_check_self(mp_obj_is_str_or_bytes(args[3]));
-    GET_STR_DATA_LEN(args[3], str, str_len);
-    char file[str_len];
-    strcpy(file, (char *)str);
+// STATIC mp_obj_t show_image(size_t n_args, const mp_obj_t *args)
+// {
+//     tftdisp_class_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+//     uint8_t x=mp_obj_get_int(args[1]);
+//     uint8_t y=mp_obj_get_int(args[2]);
+//     mp_check_self(mp_obj_is_str_or_bytes(args[3]));
+//     GET_STR_DATA_LEN(args[3], str, str_len);
+//     char file[str_len];
+//     strcpy(file, (char *)str);
     
-    printf("Hago uso de valores para leer el epacio de la micro SD \n");
-    FATFS fatfs;    ///Archivo del sistema para el driver (SD)
-    FIL fil;        //Estructura del objeto de archivo
-    FRESULT fresult;///Retorno de ejecucion de funciones (Enum definidos)
-    UINT testBytes; //Variable entera de 32 bits sin signo
+//     printf("Hago uso de valores para leer el epacio de la micro SD \n");
+//     FATFS fatfs;    ///Archivo del sistema para el driver (SD)
+//     FIL fil;        //Estructura del objeto de archivo
+//     FRESULT fresult;///Retorno de ejecucion de funciones (Enum definidos)
+//     UINT testBytes; //Variable entera de 32 bits sin signo
 
-    uint8_t BMInfo_Buffer[54];
-    uint16_t PointerImage=0;
-    uint16_t HeightImg, WideImg;
+//     uint8_t BMInfo_Buffer[54];
+//     uint16_t PointerImage=0;
+//     uint16_t HeightImg, WideImg;
 
-    //init the use of FS
-    //This function registers/unregisters a filesystem object
-    printf("Monto la SD\n");
-	if(fresult == FR_OK){
-		//This function opens a file and sets the write/read pointer to zero
-        printf("Todo OK, Voy a abrir el archivo %s \n",file);
-		fresult = f_open(&fatfs ,&fil , file, FA_READ | FA_WRITE);
-		if(fresult == FR_OK){ 			//checking if a file is open correctly
-			fresult = f_lseek(&fil, 0); //Pointing to begin of file BMP.
-            printf("Voy a posicionarme la posicion 0 del archivo\n");
-			// Getting all the parameters of the file BMP.
-			// Reads a firts 54 bytes of file and saves in BMInfo_Buffer.
-			fresult = f_read(&fil, BMInfo_Buffer, sizeof(BMInfo_Buffer), &testBytes);
-            printf("Voy a leer el archivo\n");
-			//In this conditional it's verified the "BM" nature of the file
-			if (BMInfo_Buffer[0] == 'B' && BMInfo_Buffer[1] == 'M'){
-				//extracting size of image.
-				HeightImg = (BMInfo_Buffer[19] << 8 | BMInfo_Buffer[18]);
-				WideImg = (BMInfo_Buffer[23] << 8 | BMInfo_Buffer[22]);
-				if(HeightImg<=160 && WideImg<=128){//checking size of image.
-					if(BMInfo_Buffer[28]==8){ //checking the format codifying of the pixels
-						/*Here two variables are created:
-						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.
-						 *Image_Line_RGB: will store the 480 numbers, those are bytes information RGB to print in screen.*/
-						uint8_t Line_Buffer[BMInfo_Buffer[18]];
-						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
-						uint8_t ColorMap_Buffer[1024];
-						// Get the color map
-						fresult = f_lseek(&fil, 54);
-						fresult = f_read(&fil, ColorMap_Buffer, sizeof(ColorMap_Buffer), &testBytes);
-						// This for cycle will run many times as the height of the image
-						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
-						{
-							//This pointer it's use to get the information inside the Line buffer
-							PointerImage = 0;
-							//Get the line N
-							fresult = f_lseek(&fil, 1078+(BMInfo_Buffer[18]*j));
-							fresult = f_read(&fil, Line_Buffer, sizeof(Line_Buffer), &testBytes);
-							//In this for cycle it's created the line tha will be printed in Ophyra's TFT---
-							for(uint16_t i = 0; i < sizeof(Image_Line_RGB); i=i+3)
-							{
-								Image_Line_RGB[i+2] = ColorMap_Buffer[(Line_Buffer[PointerImage])*4];
+//     //init the use of FS
+//     //This function registers/unregisters a filesystem object
+//     fresult=f_mount(&fatfs);
+//     printf("Monto la SD\n");
+// 	if(fresult == FR_OK){
+// 		//This function opens a file and sets the write/read pointer to zero
+//         printf("Todo OK, Voy a abrir el archivo %s \n",file);
+// 		fresult = f_open(&fatfs ,&fil , file, FA_READ | FA_WRITE);
+// 		if(fresult == FR_OK){ 			//checking if a file is open correctly
+// 			fresult = f_lseek(&fil, 0); //Pointing to begin of file BMP.
+//             printf("Voy a posicionarme la posicion 0 del archivo\n");
+// 			// Getting all the parameters of the file BMP.
+// 			// Reads a firts 54 bytes of file and saves in BMInfo_Buffer.
+// 			fresult = f_read(&fil, BMInfo_Buffer, sizeof(BMInfo_Buffer), &testBytes);
+//             printf("Voy a leer el archivo\n");
+// 			//In this conditional it's verified the "BM" nature of the file
+// 			if (BMInfo_Buffer[0] == 'B' && BMInfo_Buffer[1] == 'M'){
+// 				//extracting size of image.
+// 				HeightImg = (BMInfo_Buffer[19] << 8 | BMInfo_Buffer[18]);
+// 				WideImg = (BMInfo_Buffer[23] << 8 | BMInfo_Buffer[22]);
+// 				if(HeightImg<=160 && WideImg<=128){//checking size of image.
+// 					if(BMInfo_Buffer[28]==8){ //checking the format codifying of the pixels
+// 						/*Here two variables are created:
+// 						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.
+// 						 *Image_Line_RGB: will store the 480 numbers, those are bytes information RGB to print in screen.*/
+// 						uint8_t Line_Buffer[BMInfo_Buffer[18]];
+// 						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
+// 						uint8_t ColorMap_Buffer[1024];
+// 						// Get the color map
+// 						fresult = f_lseek(&fil, 54);
+// 						fresult = f_read(&fil, ColorMap_Buffer, sizeof(ColorMap_Buffer), &testBytes);
+// 						// This for cycle will run many times as the height of the image
+// 						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
+// 						{
+// 							//This pointer it's use to get the information inside the Line buffer
+// 							PointerImage = 0;
+// 							//Get the line N
+// 							fresult = f_lseek(&fil, 1078+(BMInfo_Buffer[18]*j));
+// 							fresult = f_read(&fil, Line_Buffer, sizeof(Line_Buffer), &testBytes);
+// 							//In this for cycle it's created the line tha will be printed in Ophyra's TFT---
+// 							for(uint16_t i = 0; i < sizeof(Image_Line_RGB); i=i+3)
+// 							{
+// 								Image_Line_RGB[i+2] = ColorMap_Buffer[(Line_Buffer[PointerImage])*4];
 
-								Image_Line_RGB[i+1] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+1];
+// 								Image_Line_RGB[i+1] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+1];
 
-								Image_Line_RGB[i] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+2];
+// 								Image_Line_RGB[i] = ColorMap_Buffer[(Line_Buffer[PointerImage]*4)+2];
 
-								PointerImage++;
-							}
-							//-------------------------Prints the line N on Ophyra's TF-------------------
-							pstImgdesc.pu8Img = Image_Line_RGB;
-							pstImgdesc.u8XSize = BMInfo_Buffer[18];
-							pstImgdesc.u8YSize = 1;
-							pstImgdesc.u8XCursor = x;
-							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
-							drawImg(self ,&pstImgdesc);
-							//----------------------------------------------------------------------------
-						}
+// 								PointerImage++;
+// 							}
+// 							//-------------------------Prints the line N on Ophyra's TF-------------------
+// 							pstImgdesc.pu8Img = Image_Line_RGB;
+// 							pstImgdesc.u8XSize = BMInfo_Buffer[18];
+// 							pstImgdesc.u8YSize = 1;
+// 							pstImgdesc.u8XCursor = x;
+// 							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
+// 							drawImg(self ,&pstImgdesc);
+// 							//----------------------------------------------------------------------------
+// 						}
 
-					}else if(BMInfo_Buffer[28]==24){
-						/*Here two variables are created:
-						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.*/
-						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
-						// This for cycle will run many times as the height of the image
-						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
-						{//Get the line N
-							fresult = f_lseek(&fil, 54+(3*BMInfo_Buffer[18]*j));
-							fresult = f_read(&fil, Image_Line_RGB, sizeof(Image_Line_RGB), &testBytes);
-							//-------------------------Prints the line N on Ophyra's TF-------------------
-							for(uint16_t i=0; i < sizeof(Image_Line_RGB); i=i+3)
-							{
-								uint8_t tempo = Image_Line_RGB[i];
-								Image_Line_RGB[i] = Image_Line_RGB[i+2];
-								Image_Line_RGB[i+2] = tempo;
-							}
-							pstImgdesc.pu8Img = Image_Line_RGB;
-							pstImgdesc.u8XSize = BMInfo_Buffer[18];
-							pstImgdesc.u8YSize = 1;
-							pstImgdesc.u8XCursor = x;
-							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
-							drawImg(self, &pstImgdesc);
-							//----------------------------------------------------------------------------
-						}
-					}else{
-						printf("Error only 8 or 24 bit supported");
-					}
-				}else{
-					printf("Error image too large");
-				}
-			}else{
-				printf("Error Image is not a BMP");
-			}
-		}else{
-			printf("Error Image not found!");
-		}
-	}
-	else{
-		printf("Error SD no mount");
-	}
-	if(fresult == FR_OK){
-		fresult = f_close(&fil);//This function close an open file
-        printf("Cerre el archivo\n");
-	}    
-    return mp_const_none;
+// 					}else if(BMInfo_Buffer[28]==24){
+// 						/*Here two variables are created:
+// 						 *Line_Buffer: store the 160 numbers, those bytes point to ColorMAP_Buffer.*/
+// 						uint8_t Image_Line_RGB[BMInfo_Buffer[18]*3];
+// 						// This for cycle will run many times as the height of the image
+// 						for (uint8_t j = 0; j<BMInfo_Buffer[22]; j++)
+// 						{//Get the line N
+// 							fresult = f_lseek(&fil, 54+(3*BMInfo_Buffer[18]*j));
+// 							fresult = f_read(&fil, Image_Line_RGB, sizeof(Image_Line_RGB), &testBytes);
+// 							//-------------------------Prints the line N on Ophyra's TF-------------------
+// 							for(uint16_t i=0; i < sizeof(Image_Line_RGB); i=i+3)
+// 							{
+// 								uint8_t tempo = Image_Line_RGB[i];
+// 								Image_Line_RGB[i] = Image_Line_RGB[i+2];
+// 								Image_Line_RGB[i+2] = tempo;
+// 							}
+// 							pstImgdesc.pu8Img = Image_Line_RGB;
+// 							pstImgdesc.u8XSize = BMInfo_Buffer[18];
+// 							pstImgdesc.u8YSize = 1;
+// 							pstImgdesc.u8XCursor = x;
+// 							pstImgdesc.u8YCursor = y + (BMInfo_Buffer[22] - j - 1);
+// 							drawImg(self, &pstImgdesc);
+// 							//----------------------------------------------------------------------------
+// 						}
+// 					}else{
+// 						printf("Error only 8 or 24 bit supported");
+// 					}
+// 				}else{
+// 					printf("Error image too large");
+// 				}
+// 			}else{
+// 				printf("Error Image is not a BMP");
+// 			}
+// 		}else{
+// 			printf("Error Image not found!");
+// 		}
+// 	}
+// 	else{
+// 		printf("Error SD no mount");
+// 	}
+// 	if(fresult == FR_OK){
+// 		fresult = f_close(&fil);//This function close an open file
+//         printf("Cerre el archivo\n");
+// 	}    
+//     return mp_const_none;
 
-}
-//Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
+// }
+//The above functions are associated with their corresponding Micropython function object.
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(st7735_init_obj, 1, 2, st7735_init);
 MP_DEFINE_CONST_FUN_OBJ_2(inverted_obj, inverted);
 MP_DEFINE_CONST_FUN_OBJ_2(power_obj, power);
@@ -1101,13 +1095,13 @@ MP_DEFINE_CONST_FUN_OBJ_VAR(rect_obj, 6, rect);
 MP_DEFINE_CONST_FUN_OBJ_VAR(line_obj, 6, line);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(text_obj, 5, 7, text);
 MP_DEFINE_CONST_FUN_OBJ_2(clear_obj, clear);
-MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
+// MP_DEFINE_CONST_FUN_OBJ_VAR(show_image_obj, 4, show_image);
 /*
-    Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
-    programacion en Micropython. Ej: Si se escribe:
+    The Micropython function object is associated with a certain string, which will be used in Micropython programming.
+    Micropython programming. Ex: If you write:
         ST7735().backlight(1)
-    Internamente se llama al objeto de funcion backlight_state_obj, que esta asociado con la funcion
-    backlight_state, que cambia el estado de la luz de fondo de la pantalla TFT.
+    Internally it calls the function object backlight_state_obj, which is associated with the function
+    backlight_state, which changes the state of the backlight of the TFT screen.
 */
 STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&st7735_init_obj) },
@@ -1120,8 +1114,8 @@ STATIC const mp_rom_map_elem_t tftdisp_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&line_obj) },
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&text_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&clear_obj) },
-    { MP_ROM_QSTR(MP_QSTR_show_image), MP_ROM_PTR(&show_image_obj) },
-    //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
+    // { MP_ROM_QSTR(MP_QSTR_show_image), MP_ROM_PTR(&show_image_obj) },
+    //Name of the func. to be invoked in Python     Pointer to the object of the func. to be invoked.
 };
                                 
 STATIC MP_DEFINE_CONST_DICT(tftdisp_class_locals_dict, tftdisp_class_locals_dict_table);
@@ -1135,21 +1129,21 @@ const mp_obj_type_t tftdisp_class_type = {
 };
 
 STATIC const mp_rom_map_elem_t ophyra_tftdisp_globals_table[] = {
-                                                    //Nombre del archivo (User C module)
+                                                    //File name (User C module)
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_ophyra_tftdisp) },
-            //Nombre de la clase        //Nombre del "tipo" asociado.
+            //Class name                //Name of the associated "type".
     { MP_ROM_QSTR(MP_QSTR_ST7735), MP_ROM_PTR(&tftdisp_class_type) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_ophyra_tftdisp_globals, ophyra_tftdisp_globals_table);
 
-// Define module object.
+// Define object module.
 const mp_obj_module_t ophyra_tftdisp_user_cmodule = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&mp_module_ophyra_tftdisp_globals,
 };
 
-// Registro del modulo para hacerlo disponible para Python.
-//                      nombreArchivo, nombreArchivo_user_cmodule, MODULE_IDENTIFICADOR_ENABLED
+// Register the module to make it available for Python.
+// Filename, filename_user_cmodule, MODULE_IDENTIFIER_ENABLED
 MP_REGISTER_MODULE(MP_QSTR_ophyra_tftdisp, ophyra_tftdisp_user_cmodule, MODULE_OPHYRA_TFTDISP_ENABLED);
 
