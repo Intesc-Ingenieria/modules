@@ -1,26 +1,26 @@
 /*
     ophyra_botones.c
 
-    Modulo de usuario en C para la utilizacion de los cuatro botones la tarjeta Ophyra, fabricada por
-    Intesc Electronica y Embebidos.
+    C usermod to use the four general-purpose buttons on the Ophyra board, manufactured by
+    Intesc Electronica y Embebidos, located in Puebla, Pue. Mexico.
 
-    Este archivo incluye la definicion de una clase con 4 funciones, que retornan el estado del pin
-    en donde esta el boton especificado.
+    This file includes the definition of a class with four functions. Each of them returns the state of the
+    corresponding pin, in which there is the specified button.    
 
-    Para construir el firmware incluyendo este modulo, ejecutar en Cygwin:
+    To build the Micropython firmware for the Ophyra board including this C usermod, use:
         make BOARD=OPHYRA USER_C_MODULES=../../../modules CFLAGS_EXTRA=-DMODULE_OPHYRA_BOTONES_ENABLED=1 all
 
-        En USER_C_MODULES se especifica el path hacia la localizacion de la carpeta modules, donde se encuentra
-        el archivo ophyra_botones.c y micropython.mk
+        In USER_C_MODULES the path to the "modules" folder is specified. Inside of it, there is the folder
+        "ophyra_botones", which contains the ophyra_botones.c and micropython.mk files.
 
-    Escrito por: Jonatan Salinas.
-    Ultima fecha de modificacion: 04/03/2021.
+    Written by: Jonatan Salinas.
+    Last modification: 04/03/2021.
 
 */
 
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "ports/stm32/mphalport.h"          //Para el uso de la funcion mp_hal_pin_config
+#include "ports/stm32/mphalport.h"          //To use the function mp_hal_pin_config
 
 typedef struct _buttons_class_obj_t{
     mp_obj_base_t base;
@@ -28,21 +28,21 @@ typedef struct _buttons_class_obj_t{
 
 const mp_obj_type_t buttons_class_type;
 
-//Funcion print
+//Print function
 STATIC void buttons_class_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind){
     (void)kind;
     mp_print_str(print, "buttons_class()");
 }
 
 /*
-    make_new: Constructor de la clase. Esta funcion se invoca cuando el usuario de Micropython escribe:
+    make_new: Class constructor. This function is invoked when the Micropython user writes:
         sw()
 */
 STATIC mp_obj_t buttons_class_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     buttons_class_obj_t *self = m_new_obj(buttons_class_obj_t);
     self->base.type = &buttons_class_type;
 
-    //Configuracion de los 4 pines donde estan los botones en la Ophyra, como INPUT y PULL_UP
+    //Configuration of the four pins, at which the buttons of the Ophyra board are attached, as INPUT and PULL_UP
     mp_hal_pin_config(pin_C2, MP_HAL_PIN_MODE_INPUT, MP_HAL_PIN_PULL_UP, 0);
     mp_hal_pin_config(pin_D5, MP_HAL_PIN_MODE_INPUT, MP_HAL_PIN_PULL_UP, 0);
     mp_hal_pin_config(pin_D4, MP_HAL_PIN_MODE_INPUT, MP_HAL_PIN_PULL_UP, 0);
@@ -52,8 +52,8 @@ STATIC mp_obj_t buttons_class_make_new(const mp_obj_type_t *type, size_t n_args,
 }
 
 /*
-    Estas 4 funciones retornan el estado actual de un pin especifico, para saber si el boton ha sido presionado
-    o no. Retorna 0 si el boton esta presionado, y 1 si no lo esta.
+    These four functions return the current state of a specific pin, in order to know if the button has been
+    pressed or not. Returns 0 if the button is pressed, and 1 if not.
 */
 STATIC mp_obj_t button0_pressed(mp_obj_t self_in) {
     return mp_obj_new_int(mp_hal_pin_read(pin_C2));
@@ -71,25 +71,27 @@ STATIC mp_obj_t button3_pressed(mp_obj_t self_in) {
     return mp_obj_new_int(mp_hal_pin_read(pin_D3));
 };
 
-//Se asocian las funciones arriba escritas con su correspondiente objeto de funcion para Micropython.
+//We associate the functions above with their corresponding Micropython function object.
 MP_DEFINE_CONST_FUN_OBJ_1(button0_pressed_obj, button0_pressed);
 MP_DEFINE_CONST_FUN_OBJ_1(button1_pressed_obj, button1_pressed);
 MP_DEFINE_CONST_FUN_OBJ_1(button2_pressed_obj, button2_pressed);
 MP_DEFINE_CONST_FUN_OBJ_1(button3_pressed_obj, button3_pressed);
 
 /*
-    Se asocia el objeto de funcion de Micropython con cierto string, que sera el que se utilice en la
-    programacion en Micropython. Ej: Si se escribe:
+    Here, we associate the "function object" of Micropython with a specific string. This string is the one
+    that will be used in the Micropython programming. For example, if we write:
         sw().sw1()
-    Internamente se llama al objeto de funcion button0_pressed_obj, que esta asociado con la funcion
-    button0_pressed, que retorna el valor al leer el pin donde se encuentra el boton 1.
+    Internally, in some way the function object "button0_pressed_obj" is called, which in fact is associated with
+    the button0_pressed function, which return the value of the pin at which the button 1 is connected.
 */
 STATIC const mp_rom_map_elem_t buttons_class_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_sw1), MP_ROM_PTR(&button0_pressed_obj) },
     { MP_ROM_QSTR(MP_QSTR_sw2), MP_ROM_PTR(&button1_pressed_obj) },
     { MP_ROM_QSTR(MP_QSTR_sw3), MP_ROM_PTR(&button2_pressed_obj) },
     { MP_ROM_QSTR(MP_QSTR_sw4), MP_ROM_PTR(&button3_pressed_obj) },
-    //Nombre de la func. que se va a invocar en Python     //Pointer al objeto de la func. que se va a invocar.
+    //Name of the function that         //Associated function object.
+    //is going to be invoked in
+    //Micropython     
 };
                                 
 STATIC MP_DEFINE_CONST_DICT(buttons_class_locals_dict, buttons_class_locals_dict_table);
@@ -103,10 +105,10 @@ const mp_obj_type_t buttons_class_type = {
 };
 
 STATIC const mp_rom_map_elem_t ophyra_botones_globals_table[] = {
-                                                    //Nombre del archivo (User C module)
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_ophyra_botones) },
-            //Nombre de la clase        //Nombre del "tipo" asociado.
+                                                    //Name of this C usermode file
     { MP_ROM_QSTR(MP_QSTR_sw), MP_ROM_PTR(&buttons_class_type) },
+    //sw: Name of the class         //Name of the associated "type".
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_ophyra_botones_globals, ophyra_botones_globals_table);
@@ -117,7 +119,7 @@ const mp_obj_module_t ophyra_botones_user_cmodule = {
     .globals = (mp_obj_dict_t *)&mp_module_ophyra_botones_globals,
 };
 
-// Registro del modulo para hacerlo disponible para Python.
-//                      nombreArchivo, nombreArchivo_user_cmodule, MODULE_IDENTIFICADOR_ENABLED
+// We need to register the module to make it available for Python.
+//                          nameOfTheFile, nameOfTheFile_user_cmodule, MODULE_IDENTIFIER_ENABLED
 MP_REGISTER_MODULE(MP_QSTR_ophyra_botones, ophyra_botones_user_cmodule, MODULE_OPHYRA_BOTONES_ENABLED);
 
