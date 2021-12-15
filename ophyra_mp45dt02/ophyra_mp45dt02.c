@@ -1,13 +1,9 @@
 /*
     ophyra_mp45dt02.c
-
     C usermod to use the microphone MP45DT02 on the Ophyra board, manufactured by
     Intesc Electronica y Embebidos, located in Puebla, Pue. Mexico.
-
-    
-
+    Date: 14 december 2021 
     Written by: Dionicio Meza.
-
 */
 #include <stdio.h>
 #include <stdint.h>
@@ -26,11 +22,10 @@
 #include "dma.h"
 #include "py/mphal.h"    
 
-typedef enum {
-    BLOCKING,
-    NON_BLOCKING,
-} io_mode_t;
-
+#define FREC_PDM 176000
+#define FREC_PCM 44000
+#define LONG_BUF 6 * 2
+#define HALF_BUF (LONG_BUF/2)
 
 typedef struct _non_blocking_descriptor_t {
     mp_buffer_info_t appbuf;
@@ -41,9 +36,9 @@ typedef struct _non_blocking_descriptor_t {
 typedef struct _mp45dt02_obj_t {
     mp_obj_base_t base;
     mp_obj_t callback_for_non_blocking;
-    uint16_t dma_buffer[34];
+    uint16_t dma_buffer[LONG_BUF];
     non_blocking_descriptor_t non_blocking_descriptor;
-    io_mode_t io_mode;
+    
     I2S_HandleTypeDef hi2s2;
     DMA_HandleTypeDef hdma_rx;
     const dma_descr_t *dma_descr_rx;
@@ -67,48 +62,115 @@ uint16_t sincfilter[WINDOWS] = {0, 2, 9, 21, 39, 63, 94, 132, 179, 236, 302, 379
 
 #define PDM_REPEAT_LOOP_16(X) X X X X X X X X X X X X X X X X
 
-#define M 39
+#define M 103
 float h[M] = {
 
-		  0.006526294108719504,//20-1000,1500 16k  39
-		    0.0036954546212568918,
-		    0.0027581327594972563,
-		    -0.00014809822371298327,
-		    -0.005263184187396691,
-		    -0.012356628833352229,
-		    -0.020643674705147004,
-		    -0.028757957640461573,
-		    -0.03494478865704871,
-		    -0.03725107760327918,
-		    -0.03393048708971835,
-		    -0.023804873512318053,
-		    -0.006560524225643958,
-		    0.01703205026739772,
-		    0.045105685552851424,
-		    0.07487534752671617,
-		    0.10301820736184145,
-		    0.1261467794208122,
-		    0.14134063629844007,
-		    0.14663628101378087,
-		    0.14134063629844007,
-		    0.1261467794208122,
-		    0.10301820736184145,
-		    0.07487534752671617,
-		    0.045105685552851424,
-		    0.01703205026739772,
-		    -0.006560524225643958,
-		    -0.023804873512318053,
-		    -0.03393048708971835,
-		    -0.03725107760327918,
-		    -0.03494478865704871,
-		    -0.028757957640461573,
-		    -0.020643674705147004,
-		    -0.012356628833352229,
-		    -0.005263184187396691,
-		    -0.00014809822371298327,
-		    0.0027581327594972563,
-		    0.0036954546212568918,
-		    0.006526294108719504
+
+
+  0.005383878543905767,//50-1000,1500 44k  103
+  0.0008745285494715447,
+  0.0008482121881024766,
+  0.0007460661434193918,
+  0.0005591943982935655,
+  0.0002791528160262167,
+  -0.00009918091362182439,
+  -0.0005811661980721277,
+  -0.0011671893566906496,
+  -0.0018565212849891023,
+  -0.002645092214276294,
+  -0.0035243971082051908,
+  -0.004482296433960019,
+  -0.005504049776296296,
+  -0.00657090631514472,
+  -0.007660384600351277,
+  -0.008746718621093214,
+  -0.009800854443203912,
+  -0.010792801755240751,
+  -0.011690626248753846,
+  -0.012460044110719715,
+  -0.013066138954722997,
+  -0.013478050976535164,
+  -0.013661419705534182,
+  -0.01358814972261887,
+  -0.013230659567661602,
+  -0.012569445996477512,
+  -0.01157485826919379,
+  -0.01025972395735936,
+  -0.008591627155855458,
+  -0.0065797395189081615,
+  -0.004235785042586487,
+  -0.0015738584167381312,
+  0.0013871360655679007,
+  0.0046189335455996275,
+  0.008086638890839394,
+  0.011747688496100916,
+  0.015554266016657506,
+  0.019454870341107575,
+  0.023394135061082386,
+  0.02731338070322758,
+  0.031152907654284957,
+  0.03485296501818983,
+  0.03835421967664724,
+  0.04159966314102669,
+  0.04453367705215179,
+  0.04710590599599399,
+  0.049273780397548254,
+  0.05100223257635541,
+  0.052255648506699295,
+  0.05301808055521172,
+  0.05327320160592689,
+  0.05301808055521172,
+  0.052255648506699295,
+  0.05100223257635541,
+  0.049273780397548254,
+  0.04710590599599399,
+  0.04453367705215179,
+  0.04159966314102669,
+  0.03835421967664724,
+  0.03485296501818983,
+  0.031152907654284957,
+  0.02731338070322758,
+  0.023394135061082386,
+  0.019454870341107575,
+  0.015554266016657506,
+  0.011747688496100916,
+  0.008086638890839394,
+  0.0046189335455996275,
+  0.0013871360655679007,
+  -0.0015738584167381312,
+  -0.004235785042586487,
+  -0.0065797395189081615,
+  -0.008591627155855458,
+  -0.01025972395735936,
+  -0.01157485826919379,
+  -0.012569445996477512,
+  -0.013230659567661602,
+  -0.01358814972261887,
+  -0.013661419705534182,
+  -0.013478050976535164,
+  -0.013066138954722997,
+  -0.012460044110719715,
+  -0.011690626248753846,
+  -0.010792801755240751,
+  -0.009800854443203912,
+  -0.008746718621093214,
+  -0.007660384600351277,
+  -0.00657090631514472,
+  -0.005504049776296296,
+  -0.004482296433960019,
+  -0.0035243971082051908,
+  -0.002645092214276294,
+  -0.0018565212849891023,
+  -0.0011671893566906496,
+  -0.0005811661980721277,
+  -0.00009918091362182439,
+  0.0002791528160262167,
+  0.0005591943982935655,
+  0.0007460661434193918,
+  0.0008482121881024766,
+  0.0008745285494715447,
+  0.005383878543905767
+
 };
 
 
@@ -132,8 +194,6 @@ float filtro(int in){
 }
 
 
-
-
 void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s2) {
     uint32_t errorCode = HAL_I2S_GetError(hi2s2);
     printf("I2S Error = %ld\n", errorCode);
@@ -142,15 +202,12 @@ void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s2) {
 void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s2) {
     
     mp45dt02_obj_t *self;
-    self = mp45dt02_obj;
-
+    self = mp45dt02_obj;   
     
-    mp_hal_pin_write(pin_E8, 1);
-    if ((self->non_blocking_descriptor.copy_in_progress) && (self->io_mode == NON_BLOCKING)) {
+    if (self->non_blocking_descriptor.copy_in_progress) {
         uint16_t runningsum = 0;
-        mp_hal_pin_write(pin_E7, 1);
 		uint16_t *sinc_ptr = sincfilter;
-		for (uint8_t i=17; i < 20 ; i++) {
+		for (uint8_t i=HALF_BUF; i <= HALF_BUF+3 ; i++) {
 			PDM_REPEAT_LOOP_16({
 				if (self->dma_buffer[i] & 0x1) {
 					runningsum += *sinc_ptr;
@@ -162,6 +219,7 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s2) {
 		if (self->non_blocking_descriptor.index*2 >= self->non_blocking_descriptor.appbuf.len){
             self->non_blocking_descriptor.copy_in_progress = false;
             mp_sched_schedule(self->callback_for_non_blocking, MP_OBJ_FROM_PTR(self));
+            
 		}
 	    ((uint16_t *)self->non_blocking_descriptor.appbuf.buf)[self->non_blocking_descriptor.index] = (uint16_t)filtro(runningsum);
 	    self->non_blocking_descriptor.index++;
@@ -173,13 +231,12 @@ void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef *hi2s2) {
     self = mp45dt02_obj;
     
     
-    mp_hal_pin_write(pin_E8, 0);
+    
 
-    if ((self->non_blocking_descriptor.copy_in_progress) && (self->io_mode == NON_BLOCKING)) {
+    if (self->non_blocking_descriptor.copy_in_progress)  {
         uint16_t runningsum = 0;
-        mp_hal_pin_write(pin_E7, 0);
-	    uint16_t *sinc_ptr = sincfilter;
-	    for (uint8_t i=0; i < 4 ; i++) {
+        uint16_t *sinc_ptr = sincfilter;
+	    for (uint8_t i=0; i <= 3 ; i++) {
 		    PDM_REPEAT_LOOP_16({
 			if (self->dma_buffer[i] & 0x1) {
 				runningsum += *sinc_ptr;
@@ -191,11 +248,13 @@ void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef *hi2s2) {
 	    if (self->non_blocking_descriptor.index*2 >= self->non_blocking_descriptor.appbuf.len){
 		    self->non_blocking_descriptor.copy_in_progress = false;
             mp_sched_schedule(self->callback_for_non_blocking, MP_OBJ_FROM_PTR(self));
+            
 	    }
 	    ((uint16_t *)self->non_blocking_descriptor.appbuf.buf)[self->non_blocking_descriptor.index] = (uint16_t)filtro(runningsum);
 	    self->non_blocking_descriptor.index++;
     
     }
+    
 }
 
 STATIC void mp45dt02_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -258,14 +317,13 @@ STATIC void mp45dt02_init_helper(mp45dt02_obj_t *self) {
 
     self->callback_for_non_blocking = MP_OBJ_NULL;
     self->non_blocking_descriptor.copy_in_progress = false;
-    self->io_mode = BLOCKING;
 
     I2S_InitTypeDef *init = &self->hi2s2.Init;
     init->Mode = I2S_MODE_MASTER_RX;
     init->Standard = I2S_STANDARD_PHILIPS;
     init->DataFormat = I2S_DATAFORMAT_16B;
     init->MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
-    init->AudioFreq = 68000;
+    init->AudioFreq = FREC_PDM;
     init->CPOL = I2S_CPOL_LOW;
     init->ClockSource = I2S_CLOCK_PLL;
     init->FullDuplexMode = I2S_FULLDUPLEXMODE_DISABLE;
@@ -275,7 +333,7 @@ STATIC void mp45dt02_init_helper(mp45dt02_obj_t *self) {
     }
     
     HAL_StatusTypeDef status;
-    status = HAL_I2S_Receive_DMA(&self->hi2s2,&self->dma_buffer[0], 17);
+    status = HAL_I2S_Receive_DMA(&self->hi2s2,&self->dma_buffer[0], HALF_BUF);
     
 
     if (status != HAL_OK) {
@@ -299,16 +357,7 @@ STATIC mp_obj_t mp45dt02_make_new(const mp_obj_type_t *type, size_t n_pos_args, 
         mp45dt02_deinit(MP_OBJ_FROM_PTR(self));
     }
 
-
-
-    mp_hal_pin_config(pin_E7, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
-    mp_hal_pin_write(pin_E7, 0);
-
-    mp_hal_pin_config(pin_E8, MP_HAL_PIN_MODE_OUTPUT, MP_HAL_PIN_PULL_NONE, 0);
-    mp_hal_pin_write(pin_E8, 0);
-
     mp45dt02_init_helper(self);
-
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -350,13 +399,7 @@ STATIC mp_obj_t mp45dt02_irq(mp_obj_t self_in, mp_obj_t handler) {
     if (handler != mp_const_none && !mp_obj_is_callable(handler)) {
         mp_raise_ValueError(MP_ERROR_TEXT("invalid callback"));
     }
-
-    if (handler != mp_const_none) {
-        self->io_mode = NON_BLOCKING;
-        printf("non blocking\n");
-    } 
     
-
     self->callback_for_non_blocking = handler;
     return mp_const_none;
 }
@@ -366,7 +409,6 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp45dt02_irq_obj, mp45dt02_irq);
 STATIC mp_uint_t mp45dt02_stream_read(mp_obj_t self_in, void *buf_in, mp_uint_t size, int *errcode) {
     mp45dt02_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-
     if (size == 0) {
         return 0;
     }
@@ -375,7 +417,6 @@ STATIC mp_uint_t mp45dt02_stream_read(mp_obj_t self_in, void *buf_in, mp_uint_t 
     self->non_blocking_descriptor.appbuf.len = size;
     self->non_blocking_descriptor.index = 0;
     self->non_blocking_descriptor.copy_in_progress = true;
-    
     return size;
 }
 
