@@ -1,8 +1,8 @@
 //#define OPHYRA
-#define MICROPY_HW_BOARD_NAME       "Ophyra"
+#define MICROPY_HW_BOARD_NAME       "Kairos"
 #define MICROPY_HW_MCU_NAME         "STM32F407VG"
 
-#define MICROPY_HW_HAS_SWITCH       (1)
+#define MICROPY_HW_HAS_SWITCH       (0)
 #define MICROPY_HW_HAS_FLASH        (1)
 #define MICROPY_HW_HAS_MMA7660      (0)
 #define MICROPY_HW_HAS_LIS3DSH      (0)
@@ -13,12 +13,12 @@
 #define MICROPY_HW_ENABLE_DAC       (1)
 #define MICROPY_HW_ENABLE_USB       (1)
 #define MICROPY_HW_ENABLE_SDCARD    (1)
-#define MODULE_OPHYRA_LED_ENABLED (1)
 #define MODULE_OPHYRA_MPU60_ENABLED (1)
-#define MODULE_OPHYRA_EEPROM_ENABLED (1)
-#define MODULE_OPHYRA_BOTONES_ENABLED   (1)
+#define MODULE_OPHYRA_EEPROM_ENABLED (0)
+#define MODULE_OPHYRA_BOTONES_ENABLED   (0)
 #define MODULE_OPHYRA_HCSR04_ENABLED    (1)
-#define MODULE_OPHYRA_TFTDISP_ENABLED   (1)
+#define MODULE_OPHYRA_TFTDISP_ENABLED   (0)
+#define MODULE_KAIROS_AK8975_ENABLED   (1)
 // HSE is 8MHz
 #define MICROPY_HW_CLK_PLLM (8)
 #define MICROPY_HW_CLK_PLLN (336)
@@ -74,9 +74,9 @@
 #define MICROPY_HW_USRSW_PRESSED    (0)
 
 // LEDs
-#define MICROPY_HW_LED1             (pin_E0) // red
-#define MICROPY_HW_LED2             (pin_E1) // green
-#define MICROPY_HW_LED3             (pin_E2) // blue
+#define MICROPY_HW_LED1             (pin_E11) // red
+#define MICROPY_HW_LED2             (pin_E13) // green
+#define MICROPY_HW_LED3             (pin_E14) // blue
 #define MICROPY_HW_LED_ON(pin)      (mp_hal_pin_low(pin))
 #define MICROPY_HW_LED_OFF(pin)     (mp_hal_pin_high(pin))
 
