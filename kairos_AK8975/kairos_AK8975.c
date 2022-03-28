@@ -81,7 +81,7 @@ STATIC mp_obj_t init_func()
     // se marca un error si el MPU no se encuentra
     if(_whoami[0] != 0x68)
     {
-        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("MPU6050 not found.\n"));
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("No se encontró el MPU6050.\n"));
     }
 
     // activación del bypass
@@ -90,7 +90,7 @@ STATIC mp_obj_t init_func()
 
     // despertar al sensor y configurar la frecuencia a 8MHz 
     uint8_t freq[2] = { MPU6050_FREQ_REG, 0 };
-    i2c_writeto(I2C1, MPU6050_ADDRESS, freq,2,true);
+    i2c_writeto(I2C1, MPU6050_ADDRESS, freq, 2, true);
 
     return mp_const_none;
 }
