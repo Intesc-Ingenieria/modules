@@ -81,7 +81,7 @@ STATIC mp_obj_t init_func()
     // se marca un error si el MPU no se encuentra
     if(_whoami[0] != 0x68)
     {
-        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("No se encontró el MPU6050.\n"));
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("No se encontro el MPU6050.\n"));
     }
 
     // activación del bypass
